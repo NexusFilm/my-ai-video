@@ -1,10 +1,5 @@
-import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
 import { RenderRequest } from "../../../../../types/schema";
 import { executeApi } from "../../../../helpers/api-response";
-import path from "path";
-import os from "os";
-import fs from "fs/promises";
 
 type LocalRenderOutput = {
   renderId: string;
@@ -15,43 +10,14 @@ type LocalRenderOutput = {
 export const POST = executeApi<LocalRenderOutput, typeof RenderRequest>(
   RenderRequest,
   async (req, body) => {
-    try {
-      // Bundle the Remotion project
-      const bundleLocation = await bundle({
-        entryPoint: path.join(process.cwd(), "src/remotion/index.ts"),
-        webpackOverride: (config) => config,
-      });
-
-      // Get composition
-      const composition = await selectComposition({
-        serveUrl: bundleLocation,
-        id: "DynamicComp",
-        inputProps: body.inputProps,
-      });
-
-      // Create output file in public directory so it's accessible
-      const outputFileName = `video-${Date.now()}.mp4`;
-      const outputLocation = path.join(process.cwd(), "public", outputFileName);
-
-      // Render the video
-      await renderMedia({
-        composition,
-        serveUrl: bundleLocation,
-        codec: "h264",
-        outputLocation,
-        inputProps: body.inputProps,
-      });
-
-      // Return URL to the rendered video
-      return {
-        renderId: outputFileName,
-        bucketName: "local",
-        url: `/${outputFileName}`,
-      };
-    } catch (error) {
-      throw new Error(
-        `Rendering failed: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
-    }
+    // For local rendering, return a message that rendering must be done via CLI
+    // This avoids complex server-side bundling issues
+    throw new Error(
+      "Local rendering is not available in the web UI. To render videos:\n\n" +
+      "1. Copy the generated code from the preview\n" +
+      "2. Save it to your Remotion project\n" +
+      "3. Run: npx remotion render\n\n" +
+      "Or use the browser's download feature to save the preview as a video."
+    );
   },
 );
