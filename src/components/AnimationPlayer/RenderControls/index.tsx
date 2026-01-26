@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ErrorComp } from "./Error";
-import { ProgressBar } from "./ProgressBar";
-import { DownloadButton } from "./DownloadButton";
-import { useRendering } from "../../../helpers/use-rendering";
 
 export const RenderControls: React.FC<{
   code: string;
   durationInFrames: number;
   fps: number;
-}> = ({ code, durationInFrames, fps }) => {
+}> = () => {
   return (
     <div className="flex flex-col gap-2">
       <Button
