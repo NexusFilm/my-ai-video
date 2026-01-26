@@ -1,18 +1,13 @@
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { RenderRequest } from "../../../../../types/schema";
-import { executeApi } from "../../../../helpers/api-response";
+import { NextResponse } from "next/server";
+import { RenderRequest } from "../../../../types/schema";
+import { executeApi } from "../../../helpers/api-response";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
 
-type LocalRenderOutput = {
-  renderId: string;
-  bucketName: string;
-  url: string;
-};
-
-export const POST = executeApi<LocalRenderOutput, typeof RenderRequest>(
+export const POST = executeApi<{ url: string }, typeof RenderRequest>(
   RenderRequest,
   async (req, body) => {
     try {
@@ -29,9 +24,11 @@ export const POST = executeApi<LocalRenderOutput, typeof RenderRequest>(
         inputProps: body.inputProps,
       });
 
-      // Create output file in public directory so it's accessible
-      const outputFileName = `video-${Date.now()}.mp4`;
-      const outputLocation = path.join(process.cwd(), "public", outputFileName);
+      // Create temp output file
+      const outputLocation = path.join(
+        os.tmpdir(),
+        `remotion-${Date.now()}.mp4`
+      );
 
       // Render the video
       await renderMedia({
@@ -42,16 +39,21 @@ export const POST = executeApi<LocalRenderOutput, typeof RenderRequest>(
         inputProps: body.inputProps,
       });
 
-      // Return URL to the rendered video
+      // Read the file and convert to base64 or upload to storage
+      const videoBuffer = await fs.readFile(outputLocation);
+      const base64Video = videoBuffer.toString("base64");
+
+      // Clean up
+      await fs.unlink(outputLocation);
+
+      // Return data URL (for small videos) or upload to S3/storage
       return {
-        renderId: outputFileName,
-        bucketName: "local",
-        url: `/${outputFileName}`,
+        url: `data:video/mp4;base64,${base64Video}`,
       };
     } catch (error) {
       throw new Error(
         `Rendering failed: ${error instanceof Error ? error.message : "Unknown error"}`
       );
     }
-  },
+  }
 );
