@@ -11,6 +11,9 @@ export interface UploadedImage {
   type: "reference" | "asset";
   name: string;
   description?: string;
+  uploadStatus?: "idle" | "uploading" | "success" | "error";
+  uploadError?: string;
+  publicUrl?: string; // The URL returned from the server
 }
 
 interface ImageUploaderProps {
@@ -61,11 +64,63 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         file,
         type: "asset",
         name: file.name,
+        uploadStatus: "idle",
       }));
 
-      onImagesChange([...images, ...newImages]);
+      const allImages = [...images, ...newImages];
+      onImagesChange(allImages);
+
+      // Auto-upload each file to the server
+      newImages.forEach((image) => {
+        uploadFileToServer(image, allImages);
+      });
     },
     [images, onImagesChange]
+  );
+
+  const uploadFileToServer = useCallback(
+    async (image: UploadedImage, allImages: UploadedImage[]) => {
+      if (!image.file) return;
+
+      // Update status to uploading
+      const updatedImages = allImages.map((img) =>
+        img.id === image.id ? { ...img, uploadStatus: "uploading" as const } : img
+      );
+      onImagesChange(updatedImages);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", image.file);
+        const response = await fetch("/api/upload-asset", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const publicUrl = data.url || data.dataUrl;
+
+        // Update with success status and public URL
+        const successImages = updatedImages.map((img) =>
+          img.id === image.id
+            ? { ...img, uploadStatus: "success" as const, publicUrl }
+            : img
+        );
+        onImagesChange(successImages);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Upload failed";
+        const errorImages = updatedImages.map((img) =>
+          img.id === image.id
+            ? { ...img, uploadStatus: "error" as const, uploadError: errorMessage }
+            : img
+        );
+        onImagesChange(errorImages);
+      }
+    },
+    [onImagesChange]
   );
 
   const handleUrlSubmit = useCallback(() => {
@@ -204,6 +259,31 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                   alt={image.name}
                   className="w-full h-24 object-cover"
                 />
+                
+                {/* Upload Status Overlay */}
+                {image.uploadStatus && image.uploadStatus !== "idle" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    {image.uploadStatus === "uploading" && (
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
+                        <p className="text-xs text-white font-medium">Uploading...</p>
+                      </div>
+                    )}
+                    {image.uploadStatus === "success" && (
+                      <div className="text-center">
+                        <div className="text-2xl text-green-500 mb-1">✓</div>
+                        <p className="text-xs text-white font-medium">Ready</p>
+                      </div>
+                    )}
+                    {image.uploadStatus === "error" && (
+                      <div className="text-center px-2">
+                        <div className="text-2xl text-red-500 mb-1">⚠</div>
+                        <p className="text-xs text-white font-medium">{image.uploadError || "Error"}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-2 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <Button
@@ -212,6 +292,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                       variant={image.type === "reference" ? "default" : "outline"}
                       onClick={() => toggleType(image.id)}
                       className="flex-1 text-xs"
+                      disabled={image.uploadStatus === "uploading"}
                     >
                       {image.type === "reference" ? (
                         <>
@@ -231,6 +312,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                       variant="ghost"
                       onClick={() => removeImage(image.id)}
                       className="text-destructive"
+                      disabled={image.uploadStatus === "uploading"}
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -246,9 +328,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                       className="w-full px-2 py-1 text-xs rounded border border-border bg-input text-foreground focus:outline-none focus:border-primary"
                     />
                   )}
-                  <p className="text-xs text-muted-foreground truncate">
-                    {image.name}
-                  </p>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-xs text-muted-foreground truncate flex-1">
+                      {image.name}
+                    </p>
+                    {image.uploadStatus === "success" && image.publicUrl && (
+                      <span className="text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-1 rounded whitespace-nowrap">
+                        Ready
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
