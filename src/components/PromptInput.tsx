@@ -142,24 +142,36 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const quickFixAbortRef = useRef<AbortController | null>(null);
     const isCancelledRef = useRef(false);
 
-    // Estimate total code length based on prompt complexity
+    // Estimate total code length based on prompt complexity (more realistic)
     const estimateCodeLength = (promptText: string): number => {
       const words = promptText.split(/\s+/).length;
-      const hasDataViz = /chart|graph|data|visualiz|plot|bar|line|pie/i.test(promptText);
-      const hasPhysics = /bounc|fall|grav|physic|collid|velocity/i.test(promptText);
-      const hasMultipleElements = /and|with|then|also|multiple|several/gi.test(promptText) && (promptText.match(/and|with|then|also|multiple|several/gi)?.length ?? 0) > 2;
       
-      // Base estimate: 150 lines for simple animations
-      let estimate = 150;
+      // Pattern detection for complexity
+      const hasDataViz = /chart|graph|data|visualiz|plot|bar|line|pie|axis|scale/i.test(promptText);
+      const hasPhysics = /bounc|fall|grav|physic|collid|velocity|spring|easing/i.test(promptText);
+      const hasText = /text|word|sentence|type|font|label|title|subtitle/i.test(promptText);
+      const hasImage = /image|avatar|logo|picture|photo|icon|element/i.test(promptText);
+      const hasAnimation = /animate|transition|fade|slide|zoom|rotate|scale|morph|pulse/i.test(promptText);
+      const hasMultiple = (promptText.match(/\+|and|with|also|then|multiple|several/gi) || []).length;
       
-      // Add lines based on complexity factors
-      if (words > 20) estimate += 50; // Detailed prompts need more code
-      if (hasDataViz) estimate += 80; // Data visualizations are longer
-      if (hasPhysics) estimate += 60; // Physics simulations need calculations
-      if (hasMultipleElements) estimate += 40; // Multiple elements = more code
+      // Base: ~200 lines for average animation
+      let estimate = 200;
       
-      // Cap at 350 lines (very complex animations)
-      return Math.min(350, estimate);
+      // Word count modifier (more words = more complexity)
+      if (words > 50) estimate += 80;
+      else if (words > 30) estimate += 40;
+      else if (words < 10) estimate -= 30;
+      
+      // Add for each feature detected
+      if (hasDataViz) estimate += 100;  // Data viz is complex
+      if (hasPhysics) estimate += 80;   // Physics/easing calculations
+      if (hasText) estimate += 40;      // Text styling and positioning
+      if (hasImage) estimate += 50;     // Image handling and layout
+      if (hasAnimation) estimate += 60; // Transitions and keyframes
+      if (hasMultiple > 2) estimate += 50; // Multiple elements compound complexity
+      
+      // Realistic range: 150-400 lines
+      return Math.max(150, Math.min(400, estimate));
     };
 
     // Support both controlled and uncontrolled modes
@@ -247,33 +259,45 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Convert asset images to data URLs if needed
         const assetData = await Promise.all(
           assets.map(async (asset) => {
+            console.log(`Processing asset: ${asset.name}, has file: ${!!asset.file}, url type: ${asset.url.substring(0, 20)}`);
+            
             // If we have the original file, upload and convert to a data URL on the server
             if (asset.file) {
               const formData = new FormData();
               formData.append("file", asset.file);
               try {
+                console.log(`Uploading asset file: ${asset.name}`);
                 const response = await fetch("/api/upload-asset", {
                   method: "POST",
                   body: formData,
                 });
+                if (!response.ok) {
+                  throw new Error(`Upload failed: ${response.status}`);
+                }
                 const data = await response.json();
-                return { name: asset.name, dataUrl: data.dataUrl };
+                console.log(`Asset uploaded successfully: ${asset.name}, size: ${data.dataUrl.length} chars`);
+                return { name: asset.name, dataUrl: data.dataUrl, source: "upload" };
               } catch (err) {
-                console.error("Failed to upload asset:", err);
+                console.error(`Failed to upload asset ${asset.name}:`, err);
                 // Fall through to client-side conversion
               }
             }
 
             // If we only have a URL (e.g., blob: or remote), convert it client-side to ensure the model sees a usable data URL
+            console.log(`Converting URL to data URL for: ${asset.name}`);
             const dataUrl = await urlToDataUrl(asset.url);
             if (dataUrl) {
-              return { name: asset.name, dataUrl };
+              console.log(`Successfully converted ${asset.name} to data URL, size: ${dataUrl.length} chars`);
+              return { name: asset.name, dataUrl, source: "converted" };
             }
 
+            console.warn(`Failed to convert asset ${asset.name}, using original URL as fallback`);
             // Last resort: pass through the URL (may be ignored by the model if not resolvable)
-            return { name: asset.name, dataUrl: asset.url };
+            return { name: asset.name, dataUrl: asset.url, source: "fallback" };
           })
         );
+        
+        console.log(`Processed ${assetData.length} assets:`, assetData.map(a => `${a.name} (${a.source})`).join(", "));
         
         // Build enhanced prompt with proper asset/reference prioritization
         // Assets and references come FIRST for higher priority in AI reasoning
@@ -287,9 +311,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         
         // Add assets with high priority upfront
         if (assetData.length > 0) {
-          const assetDescriptions = assetData.map(a => `- "${a.name}"`).join("\n");
+          const assetList = assetData
+            .map((a, i) => `${i + 1}. "${a.name}" (received via ${a.source})`)
+            .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE:\n\nYou MUST incorporate these image assets into the animation. They are critical components:\n${assetDescriptions}\n\nIMPORTANT: These assets must be visible and actively used in the final animation. Embed each asset using: <img src="[dataUrl]" /> with the corresponding data URL provided below.`
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- Each asset is embedded as a data URL below\n- Use <img src="{dataUrl}" style={{...}} /> to display them\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: const AVATAR = "{dataUrl}"; <img src={AVATAR} style={{borderRadius: "50%"}} />`
           );
         }
 
