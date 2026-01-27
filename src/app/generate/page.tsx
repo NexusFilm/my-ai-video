@@ -14,6 +14,7 @@ import {
   type GenerationErrorType,
 } from "../../components/PromptInput";
 import { ImageUploader, type UploadedImage } from "../../components/ImageUploader";
+import { StylePresetSelector } from "../../components/StylePresetSelector";
 import { examples } from "../../examples/code";
 import { useAnimationState } from "../../hooks/useAnimationState";
 
@@ -44,6 +45,7 @@ function GeneratePageContent() {
   } | null>(null);
   const [isRefineMode, setIsRefineMode] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -159,6 +161,11 @@ function GeneratePageContent() {
         </div>
 
         <div className="space-y-4">
+          <StylePresetSelector
+            selectedPresets={selectedPresets}
+            onPresetsChange={setSelectedPresets}
+          />
+          
           <ImageUploader
             images={uploadedImages}
             onImagesChange={setUploadedImages}
@@ -178,6 +185,7 @@ function GeneratePageContent() {
             aspectRatio={aspectRatio}
             motionBlur={motionBlur}
             uploadedImages={uploadedImages}
+            selectedPresets={selectedPresets}
           />
         </div>
       </div>

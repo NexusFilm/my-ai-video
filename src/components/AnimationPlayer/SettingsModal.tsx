@@ -49,7 +49,7 @@ export function SettingsModal({
     if (isNaN(parsed) || parsed < 1) {
       setLocalDuration(String(durationInFrames));
     } else {
-      const clamped = Math.min(1000, Math.max(1, parsed));
+      const clamped = Math.min(3000, Math.max(1, parsed)); // Max 100 seconds (3000 frames)
       setLocalDuration(String(clamped));
       onDurationChange(clamped);
     }
@@ -141,7 +141,7 @@ export function SettingsModal({
                   id="duration"
                   type="number"
                   min={1}
-                  max={1000}
+                  max={3000}
                   value={localDuration}
                   onChange={(e) => setLocalDuration(e.target.value)}
                   onBlur={handleDurationBlur}

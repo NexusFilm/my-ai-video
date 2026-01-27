@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { type UploadedImage } from "./ImageUploader";
+import { getPresetEnhancement } from "@/lib/style-presets";
+import { getVoxModePrompt } from "@/lib/vox-mode";
 import { examplePrompts } from "@/examples/prompts";
 import {
   validateGptResponse,
@@ -96,6 +98,8 @@ interface PromptInputProps {
   motionBlur?: number;
   /** Uploaded images (references and assets) */
   uploadedImages?: UploadedImage[];
+  /** Selected style presets */
+  selectedPresets?: string[];
 }
 
 export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
@@ -117,6 +121,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       aspectRatio = "16:9",
       motionBlur = 0,
       uploadedImages = [],
+      selectedPresets = [],
     },
     ref,
   ) {
@@ -218,8 +223,20 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         
         // Build enhanced prompt with image context
         let enhancedPrompt = prompt;
+        
+        // Apply style preset enhancements
+        if (selectedPresets.length > 0) {
+          const presetEnhancement = getPresetEnhancement(selectedPresets);
+          enhancedPrompt = `${presetEnhancement}\n\n## USER REQUEST:\n${prompt}`;
+          
+          // If Vox mode is selected, apply Vox specialist system
+          if (selectedPresets.includes("vox")) {
+            enhancedPrompt = getVoxModePrompt(prompt);
+          }
+        }
+        
         if (referenceContext) {
-          enhancedPrompt = `${prompt}\n\n## REFERENCE IMAGES ANALYSIS:\n${referenceContext}`;
+          enhancedPrompt += `\n\n## REFERENCE IMAGES ANALYSIS:\n${referenceContext}`;
         }
         if (assetData.length > 0) {
           const assetList = assetData.map(a => `- ${a.name}: Use this image in the animation`).join("\n");
