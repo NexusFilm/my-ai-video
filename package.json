@@ -30,6 +30,7 @@
     "@remotion/tailwind-v4": "4.0.409",
     "@remotion/three": "4.0.409",
     "@remotion/transitions": "4.0.409",
+    "@supabase/supabase-js": "^2.93.1",
     "ai": "5.0.104",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "0.7.1",

@@ -246,21 +246,27 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           referenceContext = analyses.filter(Boolean).join("\n\n");
         }
         
-        // Process asset images - use data URLs that persist across requests
+        // Process asset images - prioritize Supabase URLs, fall back to data URLs
         const assetData = await Promise.all(
           assets.map(async (asset) => {
             console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}`);
             
-            // Use the data URL returned from the server (contains full compressed image data)
+            // Prioritize Supabase public URL (http/https)
+            if (asset.publicUrl && (asset.publicUrl.startsWith("http://") || asset.publicUrl.startsWith("https://"))) {
+              console.log(`✓ Using Supabase URL for asset: ${asset.name} → ${asset.publicUrl}`);
+              return { name: asset.name, url: asset.publicUrl, source: "supabase" };
+            }
+            
+            // Fall back to data URL if Supabase not configured
             if (asset.publicUrl && asset.publicUrl.startsWith("data:")) {
-              console.log(`✓ Using data URL for asset: ${asset.name} (size: ${(asset.publicUrl.length / 1024).toFixed(1)}KB)`);
+              console.log(`⚠️ Using data URL for asset: ${asset.name} (size: ${(asset.publicUrl.length / 1024).toFixed(1)}KB)`);
               return { name: asset.name, url: asset.publicUrl, source: "data-url" };
             }
             
-            // For remote URLs, use them directly
+            // For external URLs, use them directly
             if (asset.url?.startsWith("http")) {
-              console.log(`✓ Using remote URL for asset: ${asset.name}`);
-              return { name: asset.name, url: asset.url, source: "remote" };
+              console.log(`✓ Using external URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.url, source: "external" };
             }
             
             // Asset is not usable
@@ -283,21 +289,20 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       - Prefer lightweight animations; avoid heavy DOM or unnecessary reflows`;
         let promptParts: string[] = [];
         
-        // Add assets with high priority upfront (WITHOUT embedding the actual data URLs in prompt)
+        // Add assets with high priority upfront - include actual URLs in prompt
         if (assetData.length > 0) {
-          const assetNames = assetData
-            .map((a, i) => `${i + 1}. "${a.name}"`)
+          const assetList = assetData
+            .map((a, i) => `${i + 1}. "${a.name}" → ${a.url}`)
             .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetNames}\n\n**CRITICAL - IMAGE INTEGRATION:**
-- A constant ASSET_URLS object is already defined at the top of your code (DO NOT redefine it)
-- ASSET_URLS['${assetData.map(a => a.name).join("', '")}'] contains the image data URLs
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL - IMAGE INTEGRATION:**
+- Use the exact URLs provided above in your code
 - Use ONLY standard HTML <img> tags (lowercase)
-- Example: <img src={ASSET_URLS['${assetData[0]?.name || 'image'}']} style={{width: "200px"}} />
-- DO NOT try to define or import ASSET_URLS - it's automatically available
+- Example: <img src="${assetData[0]?.url || 'https://example.com/image.jpg'}" style={{width: "200px"}} />
+- You can also store URLs in constants for cleaner code
 - Position and animate images prominently in your design
-- Do not ignore or mark as "undefined"
-- Ensure images are visible and integrated into the animation`
+- Ensure images are visible and integrated into the animation
+- URLs are already public and accessible - no authentication needed`
           );
         }
 
@@ -356,11 +361,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             setTimeout(() => console.log(`✓ Asset names logged to help debug asset usage`), 100);
           }
           
-          // Strip ASSET_URLS before sending to refine endpoint to avoid sending massive base64 strings
-          const codeForRefine = codeContext.replace(
-            /const\s+ASSET_URLS\s*=\s*\{[\s\S]*?\};\s*/g,
-            ""
-          );
+          // Code is ready to send (no ASSET_URLS to strip - using direct URLs)
+          const codeForRefine = codeContext;
           
           body = {
             currentCode: codeForRefine,
@@ -460,51 +462,12 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         finalCode = finalCode.replace(/\n?```\s*$/, "");
         finalCode = extractComponentCode(finalCode);
 
-        // Inject asset data URLs as a constant if assets were used
+        // Log asset URLs for debugging (no injection needed - AI uses URLs directly)
         if (assetData.length > 0) {
-          // Build asset URLs object entries, properly escaping the base64 strings
-          const assetEntries = assetData
-            .map(a => {
-              // Escape single quotes in the URL
-              const escapedUrl = a.url.replace(/'/g, "\\'");
-              return `  '${a.name}': '${escapedUrl}'`;
-            })
-            .join(",\n");
-          const assetConstant = `const ASSET_URLS = {\n${assetEntries}\n};\n`;
-          
-          // Find where to insert - after ALL import statements
-          // Look for the pattern: } from "..." or import ... from "...";
-          // We need to find the LAST line that ends with );
-          let lastImportEndIndex = -1;
-          
-          // Find all lines that contain 'from "' and track the last semicolon after them
-          const lines = finalCode.split('\n');
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim();
-            if (line.includes('from "') && line.includes(';')) {
-              // Found a complete import statement
-              lastImportEndIndex = finalCode.lastIndexOf(line) + line.length;
-              break;
-            }
-          }
-          
-          if (lastImportEndIndex > 0) {
-            // Insert after the last complete import statement
-            const nextNewlineIndex = finalCode.indexOf('\n', lastImportEndIndex);
-            const insertIndex = nextNewlineIndex > lastImportEndIndex ? nextNewlineIndex + 1 : lastImportEndIndex;
-            finalCode = finalCode.slice(0, insertIndex) + "\n" + assetConstant + "\n" + finalCode.slice(insertIndex);
-          } else {
-            // Fallback: insert before export
-            const exportIndex = finalCode.indexOf('export ');
-            if (exportIndex !== -1) {
-              finalCode = finalCode.slice(0, exportIndex) + assetConstant + "\n" + finalCode.slice(exportIndex);
-            } else {
-              // If no export found, prepend to the code
-              finalCode = assetConstant + "\n" + finalCode;
-            }
-          }
-          console.log(`✓ Injected ASSET_URLS constant with ${assetData.length} image(s)`);
-          console.log(`Assets available: ${assetData.map(a => a.name).join(', ')}`);
+          console.log(`✓ ${assetData.length} asset(s) available in generated code:`);
+          assetData.forEach((a, i) => {
+            console.log(`  ${i + 1}. ${a.name} (${a.source}) → ${a.url.substring(0, 100)}${a.url.length > 100 ? '...' : ''}`);
+          });
         }
 
         // Update the editor with the cleaned code
@@ -599,12 +562,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           onStreamingChange?.(true);
           onStreamPhaseChange?.("reasoning");
           
-          // Strip out ASSET_URLS constant before sending to fix endpoint
-          // This prevents sending 700KB+ of base64 data to the API
-          const codeWithoutAssets = code.replace(
-            /const\s+ASSET_URLS\s*=\s*\{[\s\S]*?\};\s*/g,
-            ""
-          );
+          // Code is ready to send (no ASSET_URLS to strip - using direct URLs)
+          const codeWithoutAssets = code;
           
           const response = await fetch("/api/quick-fix", {
             method: "POST",
