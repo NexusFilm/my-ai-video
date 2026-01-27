@@ -1,7 +1,7 @@
 /**
  * AI Video Hybrid System
  * 
- * Intelligently determines when to use AI video generation (Runway, Veo 3)
+ * Intelligently determines when to use AI video generation (Google Veo 3)
  * to enhance Remotion code with realistic elements that are hard to code.
  * 
  * Cost-conscious: Only uses AI video when necessary
@@ -21,9 +21,9 @@ export interface AIVideoElement {
   prompt: string; // What to generate
 }
 
-export const AI_VIDEO_DETECTION_PROMPT = `You are an AI video generation advisor for a motion graphics app.
+export const AI_VIDEO_DETECTION_PROMPT = `You are an AI video generation advisor for a motion graphics app using Google Veo 3.
 
-Your job is to analyze user prompts and determine if AI video generation (Runway, Veo 3) is needed to enhance the animation.
+Your job is to analyze user prompts and determine if AI video generation is needed to enhance the animation.
 
 ## WHEN AI VIDEO IS NEEDED:
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Generate AI video using Runway Gen-3 or similar service
+ * Generate AI video using Google Veo 3 (Vertex AI)
  * This is called when the system determines AI video is needed
  */
 export async function POST(request: NextRequest) {
@@ -15,77 +15,89 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if Runway API key is configured
-    if (!process.env.RUNWAY_API_KEY) {
+    // Check if Google API key is configured
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return NextResponse.json(
         { 
           error: "AI video generation not configured",
-          message: "Add RUNWAY_API_KEY to environment variables to enable AI video generation"
+          message: "Add GOOGLE_GENERATIVE_AI_API_KEY to environment variables to enable AI video generation"
         },
         { status: 503 }
       );
     }
 
-    // Generate video using Runway Gen-3 API
-    // https://docs.runwayml.com/reference/post_v1_gen3-alpha-turbo
-    const response = await fetch("https://api.runwayml.com/v1/gen3/turbo", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`,
-      },
-      body: JSON.stringify({
-        prompt_text: prompt,
-        duration: Math.min(duration, 10), // Max 10 seconds
-        ...(imageUrl && { prompt_image: imageUrl }), // Optional: image-to-video
-      }),
-    });
+    // Use Google Imagen 3 for video generation (Veo 3)
+    // https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-video
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/veo-001:generateVideo?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: {
+            text: prompt,
+            ...(imageUrl && { image: { url: imageUrl } }), // Optional: image-to-video
+          },
+          videoConfig: {
+            duration: Math.min(duration, 8), // Max 8 seconds for Veo
+            aspectRatio: "16:9",
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Runway API error: ${response.status}`);
+      throw new Error(error.message || `Google Veo API error: ${response.status}`);
     }
 
     const data = await response.json();
     
-    // Runway returns a task ID - need to poll for completion
-    const taskId = data.id;
-    
-    // Poll for completion (with timeout)
+    // Google returns video data directly or as a generation task
     let videoUrl = null;
-    let attempts = 0;
-    const maxAttempts = 60; // 5 minutes max
     
-    while (!videoUrl && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+    if (data.video?.uri) {
+      videoUrl = data.video.uri;
+    } else if (data.generationId) {
+      // Poll for completion if it's async
+      const generationId = data.generationId;
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes max
       
-      const statusResponse = await fetch(`https://api.runwayml.com/v1/tasks/${taskId}`, {
-        headers: {
-          "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`,
-        },
-      });
-      
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
+      while (!videoUrl && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
         
-        if (statusData.status === "SUCCEEDED") {
-          videoUrl = statusData.output?.[0];
-        } else if (statusData.status === "FAILED") {
-          throw new Error("Video generation failed");
+        const statusResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/operations/${generationId}?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`
+        );
+        
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          
+          if (statusData.done) {
+            if (statusData.response?.video?.uri) {
+              videoUrl = statusData.response.video.uri;
+            } else if (statusData.error) {
+              throw new Error(statusData.error.message || "Video generation failed");
+            }
+          }
         }
+        
+        attempts++;
       }
       
-      attempts++;
-    }
-    
-    if (!videoUrl) {
-      throw new Error("Video generation timed out");
+      if (!videoUrl) {
+        throw new Error("Video generation timed out");
+      }
     }
 
     return NextResponse.json({
       videoUrl,
       duration: data.duration || duration,
       prompt,
+      provider: "google-veo",
     });
   } catch (error) {
     console.error("AI video generation error:", error);
