@@ -13,8 +13,7 @@ import {
   type PromptInputRef,
   type GenerationErrorType,
 } from "../../components/PromptInput";
-import { ImageUploader, type UploadedImage } from "../../components/ImageUploader";
-import { StylePresetSelector } from "../../components/StylePresetSelector";
+import { type UploadedImage } from "../../components/ImageUploader";
 import { examples } from "../../examples/code";
 import { useAnimationState } from "../../hooks/useAnimationState";
 
@@ -69,9 +68,7 @@ function GeneratePageContent() {
     type: GenerationErrorType;
   } | null>(null);
   const [isRefineMode, setIsRefineMode] = useState(false);
-  const [selectedPresets, setSelectedPresets] = useState<string[]>(
-    urlPresets ? urlPresets.split(",") : []
-  );
+  const selectedPresets = urlPresets ? urlPresets.split(",") : [];
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -158,15 +155,21 @@ function GeneratePageContent() {
 
   return (
     <PageLayout showLogoAsLink>
-      <div className="flex-1 flex flex-col min-w-0 px-12 pb-8 gap-8 overflow-hidden">
-        <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden gap-8">
-          <CodeEditor
-            code={hasGeneratedOnce && !generationError ? code : ""}
-            onChange={handleCodeChange}
-            isStreaming={isStreaming}
-            streamPhase={streamPhase}
-          />
-          <div className="shrink-0 lg:shrink lg:flex-[2.5] lg:min-w-0 lg:h-full">
+      <div className="flex-1 flex flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8 h-full overflow-hidden">
+        {/* Main content area with editor and player */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 min-h-0 overflow-hidden">
+          {/* Code Editor - scrollable */}
+          <div className="flex-1 lg:flex-[3] min-h-[300px] lg:min-h-0 overflow-hidden">
+            <CodeEditor
+              code={hasGeneratedOnce && !generationError ? code : ""}
+              onChange={handleCodeChange}
+              isStreaming={isStreaming}
+              streamPhase={streamPhase}
+            />
+          </div>
+          
+          {/* Video Player - scrollable */}
+          <div className="flex-1 lg:flex-[2.5] min-h-[300px] lg:min-h-0 overflow-auto">
             <AnimationPlayer
               Component={generationError ? null : Component}
               durationInFrames={durationInFrames}
@@ -186,17 +189,8 @@ function GeneratePageContent() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <StylePresetSelector
-            selectedPresets={selectedPresets}
-            onPresetsChange={setSelectedPresets}
-          />
-          
-          <ImageUploader
-            images={uploadedImages}
-            onImagesChange={setUploadedImages}
-          />
-          
+        {/* Prompt Input at bottom - fixed height */}
+        <div className="shrink-0">
           <PromptInput
             ref={promptInputRef}
             onCodeGenerated={handleCodeChange}

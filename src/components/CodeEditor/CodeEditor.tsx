@@ -269,13 +269,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   return (
-    <div className="flex-2 h-[500px] lg:h-full flex flex-col min-w-0">
-      <h2 className="text-sm font-medium text-muted-foreground mb-3">
+    <div className="h-full flex flex-col min-w-0 overflow-hidden">
+      <h2 className="text-sm font-medium text-muted-foreground mb-2 md:mb-3 px-1">
         Remotion Code
       </h2>
-      <div className="flex-1 flex flex-col bg-background-editor rounded-lg overflow-hidden">
+      <div className="flex-1 flex flex-col bg-background-editor rounded-lg overflow-hidden min-h-0">
         <EditorHeader filename="MyAnimation.tsx" code={code} />
-        <div className="flex-1 overflow-hidden relative">
+        <div className="flex-1 overflow-hidden relative min-h-0">
           <StreamingOverlay
             visible={isStreaming}
             message={
