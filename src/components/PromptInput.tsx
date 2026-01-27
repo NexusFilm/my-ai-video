@@ -14,7 +14,8 @@ import {
   MicOff,
   Sparkles,
   X,
-  RefreshCw,
+  Pencil,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -424,7 +425,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             {/* Refine mode indicator */}
             {isRefineMode && !isLanding && (
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
-                <RefreshCw className="w-4 h-4 text-blue-500" />
+                <Pencil className="w-4 h-4 text-blue-500" />
                 <span className="text-xs text-blue-500">Refine Mode - Describe what to change</span>
               </div>
             )}
@@ -470,13 +471,25 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                 {!isLanding && currentCode && (
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
+                    variant={isRefineMode ? "default" : "outline"}
+                    size="sm"
                     onClick={() => onRefineModeChange?.(!isRefineMode)}
-                    className={isRefineMode ? "text-blue-500" : "text-muted-foreground"}
-                    title={isRefineMode ? "Refine mode (editing existing)" : "New generation mode"}
+                    className={isRefineMode 
+                      ? "bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 h-7" 
+                      : "border-border text-muted-foreground hover:text-foreground text-xs px-2 py-1 h-7"
+                    }
                   >
-                    <RefreshCw className="w-5 h-5" />
+                    {isRefineMode ? (
+                      <>
+                        <Plus className="w-3 h-3 mr-1" />
+                        New
+                      </>
+                    ) : (
+                      <>
+                        <Pencil className="w-3 h-3 mr-1" />
+                        Refine
+                      </>
+                    )}
                   </Button>
                 )}
 
