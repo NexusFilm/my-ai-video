@@ -134,7 +134,7 @@ export function compileCode(code: string): CompilationResult {
       "wipe",
       "flip",
       "clockWipe",
-      wrappedCode,
+      finalCode,
     );
 
     const Component = createComponent(
