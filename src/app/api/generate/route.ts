@@ -11,6 +11,7 @@ import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
 import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
+import { setLastPrompt } from "@/lib/prompt-debug";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -102,35 +103,49 @@ import { ThreeCanvas } from "@remotion/three";
 import { useState, useEffect } from "react";
 \`\`\`
 
-## USING ASSETS & IMAGES (CRITICAL)
+## USING ASSETS & IMAGES (CRITICAL - DO NOT SKIP)
 
-If you receive asset images in the prompt (between "## ASSET DATA" and output):
-1. Data URLs are provided in format: ASSET: filename.png\nDATA_URL: data:image/png;base64,...
-2. Extract the DATA_URL value and use it directly in your code
-3. Create constants for your assets at the top of the component: \`const LOGO = "data:image/png;base64,...";\`
-4. Display assets using: \`<img src={LOGO} style={getAssetStyle("contain")} />\`
-5. You MUST actively incorporate them - do not ignore assets provided
-6. Place them in meaningful positions within your animation layout
-7. Animate them if appropriate (fade in, scale, move with transitions)
-8. Use Sequence with timing to control when assets appear
-9. Use helpers: AssetHelper.isDataUrl(src), AssetHelper.isImage(src), getAssetStyle("cover"|"contain")
+If you receive asset images in the prompt (look for "## ASSET DATA URLS" section):
+1. **EXTRACT the DATA_URL values** - they are in format: DATA_URL: data:image/png;base64,... or data:image/jpeg;base64,...
+2. **COPY the exact DATA_URL value** into a JavaScript string constant
+3. **Create named constants** for each asset at the top of your component, right after hooks:
+   - const AVATAR_SRC = "data:image/...";  // COPY THE EXACT DATA_URL HERE
+   - const LOGO = "data:image/...";        // COPY THE EXACT DATA_URL HERE
+4. **Use these constants in img tags**: <img src={AVATAR_SRC} style={{...}} />
+5. **Do NOT leave constants as "undefined"** - if an image is provided, it MUST have its data URL
+6. **Position and style assets prominently** - they are critical user content
+7. **Do NOT ignore provided assets** - every asset in the ASSET DATA section must be used
 
-EXAMPLE:
+WHAT DOES NOT WORK (DO NOT DO THIS):
+- const AVATAR_SRC = "undefined";  ❌ WRONG - will show broken image
+- const AVATAR_SRC = "[dataUrl]";  ❌ WRONG - use the literal value
+- Ignoring assets in the ASSET DATA section ❌ WRONG - use them
+
+WHAT WORKS (DO THIS):
+- const AVATAR_SRC = "data:image/png;base64,iVBORw0KGgo..."; ✅ CORRECT
+- <img src={AVATAR_SRC} style={{width: 100, height: 100}} /> ✅ CORRECT
+
+EXAMPLE - If you receive:
+\`\`\`
+ASSET 1: avatar.jpg
+VAR_NAME: AVATAR_SRC
+DATA_URL: data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD...
+\`\`\`
+
+Then your code must have:
 \`\`\`tsx
-const LOGO = "data:image/png;base64,iVBORw0KGgoA...";
-const BACKGROUND = "data:image/jpg;base64,/9j/4AA...";
+const AVATAR_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD...";
 
 return (
-  <AbsoluteFill style={{ backgroundColor: "#fff" }}>
-    <Sequence from={0} durationInFrames={30}>
-      <img src={LOGO} style={{ ...getAssetStyle("contain"), opacity: interpolate(frame, [0, 20], [0, 1]) }} />
-    </Sequence>
-    <img src={BACKGROUND} style={{ ...getAssetStyle("cover"), position: "absolute", top: 0, left: 0 }} />
+  <AbsoluteFill>
+    <img src={AVATAR_SRC} style={{width: 120, height: 120, borderRadius: "50%"}} />
   </AbsoluteFill>
 );
 \`\`\`
 
-ASSETS ARE NOT OPTIONAL - If the user uploaded images, they must appear in the final animation.
+## CRITICAL RULE: ASSETS ARE REQUIRED
+
+If the user provided images, they MUST appear in your animation. Do not use "undefined" or leave them out.
 
 ## RESERVED NAMES (CRITICAL)
 
@@ -263,6 +278,10 @@ export async function POST(req: Request) {
   
   // Apply Nexus Flavor enhancements
   enhancedSystemPrompt = getEnhancedSystemPrompt(enhancedSystemPrompt);
+
+  // Save prompt for debugging
+  setLastPrompt(prompt);
+  console.log(`Saved prompt for debugging (length: ${prompt.length} chars, has data URLs: ${prompt.includes("data:image")})`);
 
   try {
     const result = streamText({

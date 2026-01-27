@@ -349,9 +349,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Add asset data URLs for embedding at the end as reference
         if (assetData.length > 0) {
           const assetEmbeds = assetData
-            .map(a => `ASSET: ${a.name}\nDATA_URL: ${a.dataUrl}`)
+            .map((a, i) => {
+              const urlPreview = a.dataUrl.substring(0, 50) + (a.dataUrl.length > 50 ? "..." : "");
+              console.log(`Asset ${i + 1} (${a.name}): ${urlPreview} (total length: ${a.dataUrl.length})`);
+              return `ASSET ${i + 1}: ${a.name}\nVAR_NAME: ${a.name.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase()}\nDATA_URL: ${a.dataUrl}`;
+            })
             .join("\n\n");
-          enhancedPrompt += `\n\n## ASSET DATA (copy-paste these data URLs into your code):\n\n${assetEmbeds}`;
+          enhancedPrompt += `\n\n## ASSET DATA URLS (REQUIRED - use these exact values in your code):\n\n${assetEmbeds}\n\nINSTRUCTIONS:\n- Copy the DATA_URL value for each asset\n- Create a constant: const [VAR_NAME] = "[DATA_URL]";\n- Use it in your JSX: <img src={[VAR_NAME]} />`;
+          
+          console.log(`Total enhanced prompt length: ${enhancedPrompt.length} characters`);
+          console.log("First 500 chars of prompt:", enhancedPrompt.substring(0, 500));
+          console.log("Last 500 chars of prompt:", enhancedPrompt.substring(Math.max(0, enhancedPrompt.length - 500)));
         }
         
         // Determine which endpoint to use
