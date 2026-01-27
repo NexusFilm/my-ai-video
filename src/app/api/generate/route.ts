@@ -65,6 +65,18 @@ This allows users to easily customize the animation.
 - Use full width of container with appropriate padding
 - Never constrain content to a small centered box
 - Use Math.max(minValue, Math.round(width * percentage)) for responsive sizing
+- RESPECT ASPECT RATIO: If the prompt mentions format (16:9 or 9:16), design accordingly
+  - 16:9 (1920x1080): Landscape, horizontal layouts work well
+  - 9:16 (1080x1920): Portrait, vertical stacking, mobile-first design
+
+## PHYSICS & BOUNDARIES (CRITICAL)
+
+When animating objects with physics (bouncing, falling, moving):
+- ALWAYS respect canvas boundaries (0, 0, width, height)
+- Bouncing balls should bounce off floor (height) and walls (0, width)
+- Falling objects should stop at the bottom (height)
+- Use realistic physics: gravity, velocity, acceleration
+- Example bounce: if (y + radius > height) { velocity *= -0.8; y = height - radius; }
 
 ## ANIMATION RULES
 
@@ -72,6 +84,7 @@ This allows users to easily customize the animation.
 - Use interpolate() for linear progress (progress bars, opacity fades)
 - Always use { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
 - Add stagger delays for multiple elements
+- For physics simulations, calculate position frame-by-frame
 
 ## AVAILABLE IMPORTS
 

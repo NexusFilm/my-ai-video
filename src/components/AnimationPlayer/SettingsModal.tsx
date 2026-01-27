@@ -18,6 +18,10 @@ interface SettingsModalProps {
   onDurationChange: (duration: number) => void;
   fps: number;
   onFpsChange: (fps: number) => void;
+  aspectRatio: "16:9" | "9:16";
+  onAspectRatioChange: (ratio: "16:9" | "9:16") => void;
+  motionBlur: number;
+  onMotionBlurChange: (blur: number) => void;
 }
 
 export function SettingsModal({
@@ -25,6 +29,10 @@ export function SettingsModal({
   onDurationChange,
   fps,
   onFpsChange,
+  aspectRatio,
+  onAspectRatioChange,
+  motionBlur,
+  onMotionBlurChange,
 }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const [localDuration, setLocalDuration] = useState(String(durationInFrames));
@@ -74,6 +82,54 @@ export function SettingsModal({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
+          <div className="grid gap-4">
+            <h3 className="text-sm font-medium text-foreground">Format</h3>
+            <div className="grid gap-2">
+              <label className="text-muted-foreground text-sm">
+                Aspect Ratio
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={aspectRatio === "16:9" ? "default" : "outline"}
+                  onClick={() => onAspectRatioChange("16:9")}
+                  className="flex-1"
+                >
+                  16:9 (YouTube)
+                </Button>
+                <Button
+                  type="button"
+                  variant={aspectRatio === "9:16" ? "default" : "outline"}
+                  onClick={() => onAspectRatioChange("9:16")}
+                  className="flex-1"
+                >
+                  9:16 (TikTok/IG)
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <h3 className="text-sm font-medium text-foreground">Effects</h3>
+            <div className="grid gap-2">
+              <label htmlFor="motionBlur" className="text-muted-foreground text-sm">
+                Motion Blur: {motionBlur === 0 ? "Off" : motionBlur}
+              </label>
+              <input
+                id="motionBlur"
+                type="range"
+                min={0}
+                max={10}
+                value={motionBlur}
+                onChange={(e) => onMotionBlurChange(Number(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground-dim">
+                Adds motion blur effect to the preview (visual only, not in render)
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-4">
             <h3 className="text-sm font-medium text-foreground">Animation</h3>
             <div className="grid grid-cols-2 gap-4">

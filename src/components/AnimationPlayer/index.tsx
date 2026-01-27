@@ -25,8 +25,12 @@ interface AnimationPlayerProps {
   Component: React.ComponentType | null;
   durationInFrames: number;
   fps: number;
+  aspectRatio: "16:9" | "9:16";
+  motionBlur: number;
   onDurationChange: (duration: number) => void;
   onFpsChange: (fps: number) => void;
+  onAspectRatioChange: (ratio: "16:9" | "9:16") => void;
+  onMotionBlurChange: (blur: number) => void;
   isCompiling: boolean;
   isStreaming: boolean;
   error: string | null;
@@ -38,18 +42,28 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
   Component,
   durationInFrames,
   fps,
+  aspectRatio,
+  motionBlur,
   onDurationChange,
   onFpsChange,
+  onAspectRatioChange,
+  onMotionBlurChange,
   isCompiling,
   isStreaming,
   error,
   errorType = "compilation",
   code,
 }) => {
+  // Calculate dimensions based on aspect ratio
+  const { width, height } = aspectRatio === "16:9" 
+    ? { width: 1920, height: 1080 }
+    : { width: 1080, height: 1920 };
+  
+  const aspectClass = aspectRatio === "16:9" ? "aspect-video" : "aspect-[9/16]";
   const renderContent = () => {
     if (isStreaming) {
       return (
-        <div className="w-full aspect-video max-h-[calc(100%-80px)] flex flex-col justify-center items-center gap-4 bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
+        <div className={`w-full ${aspectClass} max-h-[calc(100%-80px)] flex flex-col justify-center items-center gap-4 bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]`}>
           <div className="w-12 h-12 border-4 border-border border-t-primary rounded-full animate-spin" />
           <p className="text-muted-foreground text-sm">
             Waiting for code generation to finish...
@@ -60,7 +74,7 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
 
     if (isCompiling) {
       return (
-        <div className="w-full aspect-video max-h-[calc(100%-80px)] flex justify-center items-center bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
+        <div className={`w-full ${aspectClass} max-h-[calc(100%-80px)] flex justify-center items-center bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]`}>
           <div className="w-12 h-12 border-4 border-border border-t-primary rounded-full animate-spin" />
         </div>
       );
@@ -72,7 +86,7 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
 
     if (!Component) {
       return (
-        <div className="w-full aspect-video max-h-[calc(100%-80px)] flex justify-center items-center bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)] text-muted-foreground-dim text-lg font-sans">
+        <div className={`w-full ${aspectClass} max-h-[calc(100%-80px)] flex justify-center items-center bg-background-elevated rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)] text-muted-foreground-dim text-lg font-sans`}>
           Select an example to get started
         </div>
       );
@@ -80,18 +94,21 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
 
     return (
       <>
-        <div className="w-full aspect-video max-h-[calc(100%-80px)] rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]">
+        <div className={`w-full ${aspectClass} max-h-[calc(100%-80px)] rounded-lg overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.5)]`}>
           <Player
             key={Component.toString()}
             component={Component}
             durationInFrames={durationInFrames}
             fps={fps}
-            compositionHeight={1080}
-            compositionWidth={1920}
+            compositionHeight={height}
+            compositionWidth={width}
             style={{
               width: "100%",
               height: "100%",
               backgroundColor: "transparent",
+              ...(motionBlur > 0 && {
+                filter: `blur(${motionBlur * 0.5}px)`,
+              }),
             }}
             controls
             autoPlay
@@ -102,12 +119,22 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
           />
         </div>
         <div className="flex items-center justify-between gap-6">
-          <RenderControls code={code} durationInFrames={durationInFrames} fps={fps} />
+          <RenderControls 
+            code={code} 
+            durationInFrames={durationInFrames} 
+            fps={fps}
+            width={width}
+            height={height}
+          />
           <SettingsModal
             durationInFrames={durationInFrames}
             onDurationChange={onDurationChange}
             fps={fps}
             onFpsChange={onFpsChange}
+            aspectRatio={aspectRatio}
+            onAspectRatioChange={onAspectRatioChange}
+            motionBlur={motionBlur}
+            onMotionBlurChange={onMotionBlurChange}
           />
         </div>
       </>

@@ -28,6 +28,8 @@ function GeneratePageContent() {
     examples[0]?.durationInFrames || 150,
   );
   const [fps, setFps] = useState(examples[0]?.fps || 30);
+  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">("16:9");
+  const [motionBlur, setMotionBlur] = useState(0); // 0 = off, 1-10 = intensity
   const [isStreaming, setIsStreaming] = useState(willAutoStart);
   const [streamPhase, setStreamPhase] = useState<StreamPhase>(
     willAutoStart ? "reasoning" : "idle",
@@ -139,8 +141,12 @@ function GeneratePageContent() {
               Component={generationError ? null : Component}
               durationInFrames={durationInFrames}
               fps={fps}
+              aspectRatio={aspectRatio}
+              motionBlur={motionBlur}
               onDurationChange={setDurationInFrames}
               onFpsChange={setFps}
+              onAspectRatioChange={setAspectRatio}
+              onMotionBlurChange={setMotionBlur}
               isCompiling={isCompiling}
               isStreaming={isStreaming}
               error={generationError?.message || error}
@@ -161,6 +167,8 @@ function GeneratePageContent() {
           currentCode={hasGeneratedOnce ? code : undefined}
           isRefineMode={isRefineMode}
           onRefineModeChange={setIsRefineMode}
+          aspectRatio={aspectRatio}
+          motionBlur={motionBlur}
         />
       </div>
     </PageLayout>

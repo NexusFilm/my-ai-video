@@ -176,8 +176,12 @@ function DemoPageContent() {
                 Component={Component}
                 durationInFrames={durationInFrames}
                 fps={fps}
+                aspectRatio="16:9"
+                motionBlur={0}
                 onDurationChange={setDurationInFrames}
                 onFpsChange={setFps}
+                onAspectRatioChange={() => {}}
+                onMotionBlurChange={() => {}}
                 isCompiling={isCompiling}
                 isStreaming={false}
                 error={error}

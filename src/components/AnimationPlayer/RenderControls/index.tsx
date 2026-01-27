@@ -12,23 +12,27 @@ export const RenderControls: React.FC<{
   code: string;
   durationInFrames: number;
   fps: number;
-}> = ({ code, durationInFrames, fps }) => {
-  const { renderMedia, state, undo } = useRendering({ code, durationInFrames, fps });
-  const previousPropsRef = useRef({ code, durationInFrames, fps });
+  width: number;
+  height: number;
+}> = ({ code, durationInFrames, fps, width, height }) => {
+  const { renderMedia, state, undo } = useRendering({ code, durationInFrames, fps, width, height });
+  const previousPropsRef = useRef({ code, durationInFrames, fps, width, height });
 
-  // Reset rendering state when code, duration, or fps changes
+  // Reset rendering state when code, duration, fps, or dimensions change
   useEffect(() => {
     const prev = previousPropsRef.current;
     const hasChanged =
       prev.code !== code ||
       prev.durationInFrames !== durationInFrames ||
-      prev.fps !== fps;
+      prev.fps !== fps ||
+      prev.width !== width ||
+      prev.height !== height;
 
     if (hasChanged && state.status !== "init") {
       undo();
     }
-    previousPropsRef.current = { code, durationInFrames, fps };
-  }, [code, durationInFrames, fps, state.status, undo]);
+    previousPropsRef.current = { code, durationInFrames, fps, width, height };
+  }, [code, durationInFrames, fps, width, height, state.status, undo]);
 
   if (
     state.status === "init" ||

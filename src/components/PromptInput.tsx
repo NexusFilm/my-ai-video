@@ -89,6 +89,10 @@ interface PromptInputProps {
   isRefineMode?: boolean;
   /** Callback when refine mode changes */
   onRefineModeChange?: (isRefine: boolean) => void;
+  /** Aspect ratio for generation context */
+  aspectRatio?: "16:9" | "9:16";
+  /** Motion blur setting */
+  motionBlur?: number;
 }
 
 export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
@@ -107,6 +111,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       currentCode,
       isRefineMode = false,
       onRefineModeChange,
+      aspectRatio = "16:9",
+      motionBlur = 0,
     },
     ref,
   ) {
@@ -154,22 +160,29 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       try {
         const provider = getModelProvider(model);
         
+        // Add aspect ratio context to the prompt
+        const dimensions = aspectRatio === "16:9" 
+          ? "1920x1080 (16:9 landscape for YouTube)" 
+          : "1080x1920 (9:16 portrait for TikTok/Instagram)";
+        
+        const contextualPrompt = `[Format: ${dimensions}]\n\n${prompt}`;
+        
         // Determine which endpoint to use
         let endpoint = "/api/generate";
-        let body: Record<string, unknown> = { prompt, model };
+        let body: Record<string, unknown> = { prompt: contextualPrompt, model };
         
         if (isRefineMode && currentCode) {
           // Use refine endpoint for context-aware editing
           endpoint = "/api/refine";
           body = {
             currentCode,
-            refinementPrompt: prompt,
+            refinementPrompt: contextualPrompt,
             previousPrompts: getPromptHistory(),
           };
         } else if (provider === "google") {
           // Use Gemini endpoint
           endpoint = "/api/generate-gemini";
-          body = { prompt, model };
+          body = { prompt: contextualPrompt, model };
         }
 
         const response = await fetch(endpoint, {
