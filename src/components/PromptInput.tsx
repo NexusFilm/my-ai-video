@@ -44,16 +44,12 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 export const MODELS = [
-  { id: "gpt-5.2:none", name: "GPT-5.2 (No Reasoning)", provider: "openai" },
-  { id: "gpt-5.2:low", name: "GPT-5.2 (Low Reasoning)", provider: "openai" },
-  { id: "gpt-5.2:medium", name: "GPT-5.2 (Medium Reasoning)", provider: "openai" },
-  { id: "gpt-5.2:high", name: "GPT-5.2 (High Reasoning)", provider: "openai" },
-  { id: "gpt-5.2-pro:medium", name: "GPT-5.2 Pro (Medium)", provider: "openai" },
-  { id: "gpt-5.2-pro:high", name: "GPT-5.2 Pro (High)", provider: "openai" },
-  { id: "gpt-5.2-pro:xhigh", name: "GPT-5.2 Pro (XHigh)", provider: "openai" },
-  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: "google" },
-  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", provider: "google" },
+  { id: "gpt-4o", name: "GPT-4o (Recommended)", provider: "openai" },
+  { id: "gpt-4o-mini", name: "GPT-4o Mini (Fast)", provider: "openai" },
+  { id: "gpt-4-turbo", name: "GPT-4 Turbo", provider: "openai" },
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "google" },
+  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", provider: "google" },
+  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: "google" },
 ] as const;
 
 // Helper to get provider from model ID
@@ -132,7 +128,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     ref,
   ) {
     const [uncontrolledPrompt, setUncontrolledPrompt] = useState("");
-    const [model, setModel] = useState<ModelId>("gpt-5.2:low");
+    const [model, setModel] = useState<ModelId>("gpt-4o");
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
