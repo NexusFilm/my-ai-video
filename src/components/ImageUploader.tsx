@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, X, Image as ImageIcon, Eye } from "lucide-react";
+import { Upload, X, Image as ImageIcon, Eye, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface UploadedImage {
@@ -23,6 +23,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   onImagesChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [showPexelsSearch, setShowPexelsSearch] = useState(false);
+  const [pexelsQuery, setPexelsQuery] = useState("");
+  const [pexelsResults, setPexelsResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -77,6 +81,41 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     };
 
     onImagesChange([...images, newImage]);
+  }, [images, onImagesChange]);
+
+  const searchPexels = useCallback(async () => {
+    if (!pexelsQuery.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await fetch("/api/search-pexels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: pexelsQuery, perPage: 8 }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPexelsResults(data.images || []);
+      }
+    } catch (error) {
+      console.error("Pexels search failed:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [pexelsQuery]);
+
+  const addPexelsImage = useCallback((pexelsImage: any) => {
+    const newImage: UploadedImage = {
+      id: Math.random().toString(36).substring(7),
+      url: pexelsImage.url,
+      type: "asset",
+      name: pexelsImage.alt || "Pexels Image",
+    };
+    onImagesChange([...images, newImage]);
+    setPexelsResults([]);
+    setShowPexelsSearch(false);
+    setPexelsQuery("");
   }, [images, onImagesChange]);
 
   const toggleType = useCallback(
