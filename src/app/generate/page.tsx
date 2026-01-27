@@ -93,6 +93,9 @@ function GeneratePageContent() {
     overLimit: boolean;
   } | null>(null);
   const MAX_AUTO_RETRIES = 2;
+  
+  // Track error history to detect repeating/unfixable errors
+  const lastFixedErrorRef = useRef<string>("");
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -190,12 +193,25 @@ function GeneratePageContent() {
     // Check if we have an error (either compilation or generation API error)
     const currentError = generationError?.message || error;
     
+    // Check if this is the same error we just tried to fix (unfixable error)
+    // If so, don't keep trying - the AI can't fix hallucinations
+    if (currentError && lastFixedErrorRef.current === currentError) {
+      console.log("Same error repeated - stopping auto-heal (unfixable):", currentError);
+      if (agentStatus === "fixing") {
+        setAgentStatus("idle");
+      }
+      return;
+    }
+    
     // Only fix errors that appear right after generation (to avoid interrupting manual editing)
     if (currentError && justFinishedGenerationRef.current) {
       console.log("Agent detected error, attempting auto-fix...", currentError);
       
       // Mark generation as handled so we don't loop immediately
       justFinishedGenerationRef.current = false;
+      
+      // Track this error so we know if it repeats
+      lastFixedErrorRef.current = currentError;
       
       setAgentStatus("fixing");
       setAutoFixCount(prev => prev + 1);
@@ -206,6 +222,8 @@ function GeneratePageContent() {
       // Show a toast or status would be nice here, but we'll use the agent status indicator
     } else if (!currentError && !isStreaming) {
       setAgentStatus("idle");
+      // Clear error tracking when error is resolved
+      lastFixedErrorRef.current = "";
     }
   }, [
     autoHealEnabled,
@@ -269,6 +287,8 @@ function GeneratePageContent() {
       setGenerationError(null);
       setUserCancelled(false);
       setIsRateLimited(false);
+      setAutoFixCount(0);
+      lastFixedErrorRef.current = ""; // Reset error tracking for new generation
     }
   }, []);
 
