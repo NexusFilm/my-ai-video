@@ -1,23 +1,57 @@
+import { AwsRegion, RenderMediaOnLambdaOutput } from "@remotion/lambda/client";
+import {
+  renderMediaOnLambda,
+  speculateFunctionName,
+} from "@remotion/lambda/client";
+import {
+  DISK,
+  RAM,
+  REGION,
+  SITE_NAME,
+  TIMEOUT,
+} from "../../../../../config.mjs";
+import { COMP_NAME } from "../../../../../types/constants";
 import { RenderRequest } from "../../../../../types/schema";
 import { executeApi } from "../../../../helpers/api-response";
 
-type LocalRenderOutput = {
-  renderId: string;
-  bucketName: string;
-  url: string;
-};
-
-export const POST = executeApi<LocalRenderOutput, typeof RenderRequest>(
+export const POST = executeApi<RenderMediaOnLambdaOutput, typeof RenderRequest>(
   RenderRequest,
   async (req, body) => {
-    // For local rendering, return a message that rendering must be done via CLI
-    // This avoids complex server-side bundling issues
-    throw new Error(
-      "Local rendering is not available in the web UI. To render videos:\n\n" +
-      "1. Copy the generated code from the preview\n" +
-      "2. Save it to your Remotion project\n" +
-      "3. Run: npx remotion render\n\n" +
-      "Or use the browser's download feature to save the preview as a video."
-    );
+    if (
+      !process.env.REMOTION_AWS_ACCESS_KEY_ID &&
+      !process.env.AWS_ACCESS_KEY_ID
+    ) {
+      throw new TypeError(
+        "Set REMOTION_AWS_ACCESS_KEY_ID in your Vercel environment variables",
+      );
+    }
+    if (
+      !process.env.REMOTION_AWS_SECRET_ACCESS_KEY &&
+      !process.env.AWS_SECRET_ACCESS_KEY
+    ) {
+      throw new TypeError(
+        "Set REMOTION_AWS_SECRET_ACCESS_KEY in your Vercel environment variables",
+      );
+    }
+
+    const result = await renderMediaOnLambda({
+      codec: "h264",
+      functionName: speculateFunctionName({
+        diskSizeInMb: DISK,
+        memorySizeInMb: RAM,
+        timeoutInSeconds: TIMEOUT,
+      }),
+      region: REGION as AwsRegion,
+      serveUrl: SITE_NAME,
+      composition: COMP_NAME,
+      inputProps: body.inputProps,
+      framesPerLambda: 60,
+      downloadBehavior: {
+        type: "download",
+        fileName: "video.mp4",
+      },
+    });
+
+    return result;
   },
 );
