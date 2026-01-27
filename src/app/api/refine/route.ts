@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,14 @@ export async function POST(request: NextRequest) {
     }
     
     const { currentCode, refinementPrompt, previousPrompts } = await request.json();
+
+    // Track token usage for refine
+    const inputTokens = estimateTokens(currentCode) + estimateTokens(refinementPrompt) + 1500; // +1500 for system prompt
+    const outputTokens = estimateTokens(currentCode); // Output is usually similar size to input code
+    const tokenUsage = trackTokenUsage(clientId, inputTokens, outputTokens);
+    if (tokenUsage.warning) {
+      console.log(`Token usage warning: ${tokenUsage.warning}`);
+    }
 
     if (!currentCode || !refinementPrompt) {
       return Response.json(

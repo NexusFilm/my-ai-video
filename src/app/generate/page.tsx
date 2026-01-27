@@ -84,6 +84,13 @@ function GeneratePageContent() {
   const [autoFixCount, setAutoFixCount] = useState(0);
   const [agentStatus, setAgentStatus] = useState<"idle" | "monitoring" | "fixing">("idle");
   const [userCancelled, setUserCancelled] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState<{
+    currentUsage: number;
+    dailyLimit: number;
+    percentUsed: number;
+    warning?: string;
+    overLimit: boolean;
+  } | null>(null);
   const MAX_AUTO_RETRIES = 2;
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
@@ -95,6 +102,30 @@ function GeneratePageContent() {
   const isStreamingRef = useRef(isStreaming);
   const codeRef = useRef(code);
   const justFinishedGenerationRef = useRef(false);
+
+  // Fetch token usage on mount and after generation
+  const fetchUsage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/usage");
+      if (res.ok) {
+        const data = await res.json();
+        setTokenUsage(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch usage:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
+
+  // Refresh usage after streaming ends
+  useEffect(() => {
+    if (!isStreaming && hasGeneratedOnce) {
+      fetchUsage();
+    }
+  }, [isStreaming, hasGeneratedOnce, fetchUsage]);
 
   useEffect(() => {
     codeRef.current = code;
@@ -312,11 +343,29 @@ function GeneratePageContent() {
       ) : (
         <>
           <CheckCircle2 className="w-3 h-3" />
-                  generationProgress={generationProgress}
           <span>System Healthy</span>
         </>
       )}
     </button>
+  );
+
+  // Token Usage Indicator
+  const UsageIndicator = tokenUsage && (
+    <div 
+      className={`rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium ${
+        tokenUsage.overLimit
+          ? "bg-red-500/10 text-red-500 border border-red-500/20"
+          : tokenUsage.percentUsed >= 80
+          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+          : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+      }`}
+      title={tokenUsage.warning || `${tokenUsage.currentUsage.toLocaleString()} / ${tokenUsage.dailyLimit.toLocaleString()} tokens used today`}
+    >
+      <span>
+        {tokenUsage.overLimit ? "⚠️ " : ""}
+        {Math.round(tokenUsage.percentUsed)}% tokens
+      </span>
+    </div>
   );
 
   return (
@@ -324,6 +373,9 @@ function GeneratePageContent() {
       showLogoAsLink
       rightContent={
         <div className="flex items-center gap-3">
+          {/* Token Usage Indicator */}
+          {UsageIndicator}
+          
           {/* Agent Status Indicator */}
           {AgentStatusIndicator}
 

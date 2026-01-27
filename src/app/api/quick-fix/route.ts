@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 
 interface FixResponse {
   fixedCode: string;
@@ -22,6 +23,14 @@ export async function POST(request: NextRequest) {
     }
     
     const { code, error } = await request.json();
+
+    // Track token usage (quick fixes use fewer tokens)
+    const inputTokens = estimateTokens(code) + estimateTokens(error) + 500; // +500 for system prompt
+    const outputTokens = 300; // Quick fixes are small
+    const tokenUsage = trackTokenUsage(clientId, inputTokens, outputTokens);
+    if (tokenUsage.warning) {
+      console.log(`Token usage warning: ${tokenUsage.warning}`);
+    }
 
     if (!code || !error) {
       return Response.json(

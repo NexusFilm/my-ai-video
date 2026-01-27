@@ -10,6 +10,7 @@ import {
 import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
 import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -164,6 +165,15 @@ export async function POST(req: Request) {
       JSON.stringify({ error: rateLimit.reason || "Rate limit exceeded", rateLimited: true }),
       { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
     );
+  }
+
+  // Track estimated token usage (input tokens now, output estimated as ~2x input for code gen)
+  const estimatedInputTokens = estimateTokens(prompt) + 2000; // +2000 for system prompt
+  const estimatedOutputTokens = 1500; // Average code output
+  const tokenUsage = trackTokenUsage(clientId, estimatedInputTokens, estimatedOutputTokens);
+  
+  if (tokenUsage.warning) {
+    console.log(`Token usage warning for ${clientId}: ${tokenUsage.warning}`);
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
