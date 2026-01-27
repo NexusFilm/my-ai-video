@@ -647,7 +647,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         }
 
         const data = await response.json();
-        setPrompt(data.text);
+        // Append transcribed text to existing prompt instead of replacing it
+        if (!prompt.trim()) {
+          // If prompt is empty, just use the transcribed text
+          setPrompt(data.text);
+        } else {
+          // Otherwise, append with a space
+          setPrompt(`${prompt} ${data.text}`);
+        }
       } catch (error) {
         console.error("Transcription error:", error);
         onError?.("Failed to transcribe audio", "api");
