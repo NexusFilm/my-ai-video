@@ -277,6 +277,12 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         
         // Build enhanced prompt with proper asset/reference prioritization
         // Assets and references come FIRST for higher priority in AI reasoning
+        const appRules = `## APP RULES (always apply)
+      - Use Remotion/React: generate a single component, keep imports intact
+      - Use provided assets (data URLs) visibly in the animation; do not ignore them
+      - Keep structure stable; make minimal edits when refining/fixing
+      - Respect timing, easing, and positions requested by the user
+      - Prefer lightweight animations; avoid heavy DOM or unnecessary reflows`;
         let promptParts: string[] = [];
         
         // Add assets with high priority upfront
@@ -286,14 +292,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             `## REQUIRED ASSETS TO INTEGRATE:\n\nYou MUST incorporate these image assets into the animation. They are critical components:\n${assetDescriptions}\n\nIMPORTANT: These assets must be visible and actively used in the final animation. Embed each asset using: <img src="[dataUrl]" /> with the corresponding data URL provided below.`
           );
         }
+
+        // Add core app rules so the model always considers platform constraints
+        promptParts.push(appRules);
         
         // Add reference analysis
         if (referenceContext) {
           promptParts.push(`## VISUAL REFERENCES:\n${referenceContext}`);
         }
         
-        // Add user request
-        let userRequestSection = `## YOUR REQUEST:\n${activePrompt}`;
+        // Add user request (original prompt is preserved here)
+        let userRequestSection = `## YOUR REQUEST (user intent):\n${activePrompt}`;
         
         // Apply style preset enhancements to the user request
         if (selectedPresets.length > 0 && !overridePrompt) {
