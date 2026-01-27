@@ -476,16 +476,6 @@ export async function POST(req: Request) {
     console.log(`Token usage warning for ${clientId}: ${tokenUsage.warning}`);
   }
 
-  // Check API call limit (max 40 calls)
-  const apiCallCount = parseInt(process.env.API_CALL_LIMIT || "40", 10);
-  if (rateLimit.callCount > apiCallCount) {
-    console.log(`API call limit exceeded for ${clientId}: ${rateLimit.callCount}/${apiCallCount}`);
-    return new Response(
-      JSON.stringify({ error: "API call limit exceeded (40 per period)", rateLimited: true }),
-      { status: 429, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
