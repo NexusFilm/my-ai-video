@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, forwardRef, useImperativeHandle } from "react";
+import { useState, forwardRef, useImperativeHandle, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowUp,
@@ -10,6 +10,8 @@ import {
   Hash,
   BarChart3,
   Disc,
+  Mic,
+  MicOff,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -88,6 +90,10 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
   ) {
     const [uncontrolledPrompt, setUncontrolledPrompt] = useState("");
     const [model, setModel] = useState<ModelId>("gpt-5.2:low");
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
 
     // Support both controlled and uncontrolled modes
     const prompt =
@@ -206,6 +212,63 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       triggerGeneration: runGeneration,
     }));
 
+    const startRecording = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          await transcribeAudio(audioBlob);
+          stream.getTracks().forEach((track) => track.stop());
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error("Error starting recording:", error);
+        onError?.("Failed to access microphone", "api");
+      }
+    };
+
+    const stopRecording = () => {
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+    };
+
+    const transcribeAudio = async (audioBlob: Blob) => {
+      setIsTranscribing(true);
+      try {
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "recording.webm");
+
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error("Transcription failed");
+        }
+
+        const data = await response.json();
+        setPrompt(data.text);
+      } catch (error) {
+        console.error("Transcription error:", error);
+        onError?.("Failed to transcribe audio", "api");
+      } finally {
+        setIsTranscribing(false);
+      }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!prompt.trim()) return;
@@ -264,26 +327,44 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             />
 
             <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
-              <Select
-                value={model}
-                onValueChange={(value) => setModel(value as ModelId)}
-                disabled={isDisabled}
-              >
-                <SelectTrigger className="w-auto bg-transparent border-none text-muted-foreground hover:text-foreground transition-colors">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background-elevated border-border">
-                  {MODELS.map((m) => (
-                    <SelectItem
-                      key={m.id}
-                      value={m.id}
-                      className="text-foreground focus:bg-secondary focus:text-foreground"
-                    >
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={model}
+                  onValueChange={(value) => setModel(value as ModelId)}
+                  disabled={isDisabled}
+                >
+                  <SelectTrigger className="w-auto bg-transparent border-none text-muted-foreground hover:text-foreground transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background-elevated border-border">
+                    {MODELS.map((m) => (
+                      <SelectItem
+                        key={m.id}
+                        value={m.id}
+                        className="text-foreground focus:bg-secondary focus:text-foreground"
+                      >
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isDisabled || isTranscribing}
+                  className={isRecording ? "text-red-500" : ""}
+                  title={isRecording ? "Stop recording" : "Voice input"}
+                >
+                  {isRecording ? (
+                    <MicOff className="w-5 h-5" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </Button>
+              </div>
 
               <Button
                 type="submit"
