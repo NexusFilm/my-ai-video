@@ -81,7 +81,7 @@ The user wants to refine this code. Make the requested changes while keeping eve
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: refinementPrompt },

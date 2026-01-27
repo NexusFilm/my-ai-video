@@ -42,7 +42,7 @@ INVALID prompts include:
 Return true if the prompt is valid for motion graphics generation, false otherwise.`;
 
 const SYSTEM_PROMPT = `
-You are an expert in generating React components for Remotion animations.
+You are an expert in generating React components for Remotion animations. You have comprehensive knowledge of Remotion's capabilities including transforms, transitions, fonts, physics, randomness, noise, mapping, and advanced animation math.
 
 ## COMPONENT STRUCTURE
 
@@ -54,6 +54,283 @@ You are an expert in generating React components for Remotion animations.
    - Constants (COLORS, TEXT, TIMING, LAYOUT) - all UPPER_SNAKE_CASE
    - Calculations and derived values
    - return JSX
+
+## TRANSFORMS (CSS-based property animations)
+
+**5 Basic Transforms:**
+- **Opacity**: 0 (invisible) to 1 (visible), semi-transparent in between
+  \`\`\`jsx
+  <div style={{ opacity: interpolate(frame, [0, 30], [0, 1]) }} />
+  \`\`\`
+- **Scale**: 1 = natural, 2 = double size, 0.5 = half, <0 = mirrored
+  \`\`\`jsx
+  <div style={{ scale: spring({ frame, from: 0, to: 1 }) }} />
+  \`\`\`
+- **Rotate**: rotate(45deg), rotateX(), rotateY(), rotateZ() with perspective for 3D
+  \`\`\`jsx
+  <div style={{ transform: \`rotate(\${frame * 2}deg)\` }} />
+  \`\`\`
+- **Translate**: translateX(px), translateY(px), translateZ(px) - moves without affecting layout
+  \`\`\`jsx
+  <div style={{ transform: \`translateY(\${interpolate(frame, [0, 60], [0, 100])}px)\` }} />
+  \`\`\`
+- **Skew**: skew(20deg), skewX(), skewY() - distorted appearance
+  \`\`\`jsx
+  <div style={{ transform: \`skew(\${interpolate(frame, [0, 30], [0, 20])}deg)\` }} />
+  \`\`\`
+
+**Combine Multiple Transforms:**
+\`\`\`jsx
+style={{ transform: \`translateX(100px) scale(2) rotate(45deg)\` }}
+\`\`\`
+
+**Helper for Type-Safe Transforms:**
+\`\`\`jsx
+import { makeTransform, rotate, translate } from '@remotion/animation-utils';
+const transform = makeTransform([rotate(45), translate(50, 50)]);
+\`\`\`
+
+## TRANSITIONS (Scene-to-scene effects)
+
+**TransitionSeries for multiple scenes:**
+\`\`\`jsx
+import { TransitionSeries, linearTiming, springTiming } from '@remotion/transitions';
+import { fade, slide, wipe, flip, iris, clockWipe } from '@remotion/transitions';
+
+<TransitionSeries>
+  <TransitionSeries.Sequence durationInFrames={40}>
+    <SceneA />
+  </TransitionSeries.Sequence>
+  <TransitionSeries.Transition
+    presentation={slide()}
+    timing={linearTiming({ durationInFrames: 30 })}
+  />
+  <TransitionSeries.Sequence durationInFrames={60}>
+    <SceneB />
+  </TransitionSeries.Sequence>
+</TransitionSeries>
+\`\`\`
+
+**Transition Presentations:**
+- fade() - Opacity blend
+- slide() - Slide in, push out previous
+- wipe() - Slide over previous (like PowerPoint)
+- flip() - Rotate previous scene
+- clockWipe() - Circular reveal
+- iris() - Circular mask from center
+
+**Enter/Exit Animations:**
+Put transition first (entry) or last (exit) in sequence.
+
+## FONTS (Typography styling)
+
+**Google Fonts (Recommended):**
+\`\`\`jsx
+import { loadFont } from '@remotion/google-fonts/TitanOne';
+const { fontFamily } = loadFont();
+
+<div style={{ fontFamily, fontSize: 48 }}>Hello, Google Fonts</div>
+\`\`\`
+
+**Local Fonts in /public/:**
+\`\`\`jsx
+import { loadFont } from '@remotion/fonts';
+import { staticFile } from 'remotion';
+
+loadFont({
+  family: 'Inter',
+  url: staticFile('Inter-Regular.woff2'),
+  weight: '500',
+}).then(() => console.log('Font loaded!'));
+
+<div style={{ fontFamily: 'Inter' }}>Text here</div>
+\`\`\`
+
+**Manual FontFace Loading:**
+\`\`\`jsx
+import { delayRender, continueRender, staticFile } from 'remotion';
+
+const handle = delayRender('Loading font...');
+const font = new FontFace(
+  'Bangers',
+  \`url('\${staticFile('bangers.woff2')}') format('woff2')\`
+);
+
+font.load().then(() => {
+  document.fonts.add(font);
+  continueRender(handle);
+});
+\`\`\`
+
+## MEASURING DOM NODES
+
+**Using useCurrentScale():**
+\`\`\`jsx
+import { useCurrentScale } from 'remotion';
+const ref = useRef<HTMLDivElement>(null);
+const scale = useCurrentScale();
+
+const rect = ref.current?.getBoundingClientRect();
+const correctedWidth = rect.width / scale;
+const correctedHeight = rect.height / scale;
+\`\`\`
+
+## ANIMATION MATH (Composing animations)
+
+**Add/Subtract Springs for Complex Effects:**
+\`\`\`jsx
+const enter = spring({ fps, frame, config: { damping: 200 } });
+const exit = spring({
+  fps, frame,
+  durationInFrames: 20,
+  delay: durationInFrames - 20,
+  config: { damping: 200 }
+});
+const scale = enter - exit; // Composite scale value
+\`\`\`
+
+## RANDOMNESS (Deterministic pseudo-random values)
+
+**Use random() for deterministic values across threads:**
+\`\`\`jsx
+import { random } from 'remotion';
+
+const randomX = random('x-seed-1'); // Always 0-1, same across renders
+const randomY = random('y-seed-1');
+const randomColor = random('color-' + index);
+
+// Array of deterministic random values:
+const positions = new Array(10).fill(true).map((_, i) => ({
+  x: random(\`x-\${i}\`) * width,
+  y: random(\`y-\${i}\`) * height,
+}));
+\`\`\`
+
+**Use random(null) for true randomness (safe in calculateMetadata only).**
+
+## NOISE VISUALIZATION (Procedural animation)
+
+**Using @remotion/noise for organic, flowing animations:**
+\`\`\`jsx
+import { noise3D } from '@remotion/noise';
+import { interpolate } from 'remotion';
+
+const speed = 0.01; // Animation speed
+const dx = noise3D('x', px, py, frame * speed) * maxOffset;
+const dy = noise3D('y', px, py, frame * speed) * maxOffset;
+const opacity = interpolate(
+  noise3D('opacity', i, j, frame * speed),
+  [-1, 1],
+  [0, 1]
+);
+
+// Animate with noise-driven values:
+<div style={{
+  transform: \`translate(\${dx}px, \${dy}px)\`,
+  opacity
+}} />
+\`\`\`
+
+## MAPS (Geographic animations with Mapbox)
+
+**Prerequisites:**
+1. Install: \`npm i mapbox-gl @turf/turf\`
+2. Add to .env: \`REMOTION_MAPBOX_TOKEN=pk.your-token\`
+
+**Adding a Map:**
+\`\`\`jsx
+import { useDelayRender, useVideoConfig } from 'remotion';
+import mapboxgl, { Map } from 'mapbox-gl';
+
+mapboxgl.accessToken = process.env.REMOTION_MAPBOX_TOKEN;
+const ref = useRef<HTMLDivElement>(null);
+const { delayRender, continueRender } = useDelayRender();
+const { width, height } = useVideoConfig();
+const [handle] = useState(() => delayRender('Loading map...'));
+const [map, setMap] = useState<Map | null>(null);
+
+useEffect(() => {
+  const _map = new Map({
+    container: ref.current!,
+    zoom: 11.53,
+    center: [6.5615, 46.0598],
+    pitch: 65,
+    bearing: -180,
+    style: 'mapbox://styles/mapbox/standard',
+    interactive: false,
+    fadeDuration: 0,
+  });
+  _map.on('load', () => {
+    continueRender(handle);
+    setMap(_map);
+  });
+}, [handle, continueRender]);
+
+return <div ref={ref} style={{ width, height, position: 'absolute' }} />;
+\`\`\`
+
+**Animating Map Lines (with Turf.js):**
+\`\`\`jsx
+import * as turf from '@turf/turf';
+
+const routeLine = turf.lineString(lineCoordinates);
+const routeDistance = turf.length(routeLine);
+const progress = interpolate(frame, [0, durationInFrames - 1], [0, 1]);
+const currentDistance = routeDistance * progress;
+const slicedLine = turf.lineSliceAlong(routeLine, 0, currentDistance);
+
+// Draw sliced line on map
+const source = map?.getSource('route') as mapboxgl.GeoJSONSource;
+source?.setData({
+  type: 'Feature',
+  properties: {},
+  geometry: slicedLine.geometry,
+});
+\`\`\`
+
+**Animating Camera Movement:**
+\`\`\`jsx
+const alongRoute = turf.along(turf.lineString(lineCoordinates), routeDistance * progress).geometry.coordinates;
+const camera = map.getFreeCameraOptions();
+camera.lookAtPoint({ lng: alongRoute[0], lat: alongRoute[1] });
+map.setFreeCameraOptions(camera);
+\`\`\`
+
+## SHAPES LIBRARY (Primitive shapes with animation)
+
+\`\`\`jsx
+import { Circle, Rect, Triangle, Star, Ellipse, Pie } from '@remotion/shapes';
+
+<Circle radius={50} fill="#ff0000" />
+<Rect width={100} height={100} fill="#00ff00" />
+<Triangle radius={50} fill="#0000ff" />
+<Star points={5} radius={50} fill="#ffff00" />
+<Ellipse rx={60} ry={40} fill="#ff00ff" />
+<Pie radius={50} endAngle={interpolate(frame, [0, 30], [0, Math.PI * 2])} fill="#00ffff" />
+\`\`\`
+
+## LAYERS (Layering elements for depth)
+
+**AbsoluteFill for layering:**
+\`\`\`jsx
+import { AbsoluteFill, Sequence } from 'remotion';
+
+<AbsoluteFill>
+  <AbsoluteFill>
+    <Img src={staticFile('bg.png')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+  </AbsoluteFill>
+  
+  <AbsoluteFill>
+    <h1>Text on top</h1>
+  </AbsoluteFill>
+  
+  <Sequence from={60} durationInFrames={40}>
+    <Overlay text="Appears at frame 60" />
+  </Sequence>
+</AbsoluteFill>
+\`\`\`
+
+**Layer stacking:** Lower in tree = higher in z-index. Avoid z-index when possible.
 
 ## CONSTANTS RULES (CRITICAL)
 
@@ -199,6 +476,16 @@ export async function POST(req: Request) {
     console.log(`Token usage warning for ${clientId}: ${tokenUsage.warning}`);
   }
 
+  // Check API call limit (max 40 calls)
+  const apiCallCount = parseInt(process.env.API_CALL_LIMIT || "40", 10);
+  if (rateLimit.callCount > apiCallCount) {
+    console.log(`API call limit exceeded for ${clientId}: ${rateLimit.callCount}/${apiCallCount}`);
+    return new Response(
+      JSON.stringify({ error: "API call limit exceeded (40 per period)", rateLimited: true }),
+      { status: 429, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -219,10 +506,10 @@ export async function POST(req: Request) {
 
   const openai = createOpenAI({ apiKey });
 
-  // Validate the prompt first
+  // Validate the prompt first (using gpt-4o, not gpt-5.2)
   try {
     const validationResult = await generateObject({
-      model: openai("gpt-5.2"),
+      model: openai("gpt-4o"),
       system: VALIDATION_PROMPT,
       prompt: `User prompt: "${prompt}"`,
       schema: z.object({ valid: z.boolean() }),
@@ -243,11 +530,11 @@ export async function POST(req: Request) {
     console.error("Validation error:", validationError);
   }
 
-  // Detect which skills apply to this prompt
+  // Detect which skills apply to this prompt (using gpt-4o, not gpt-5.2)
   let detectedSkills: SkillName[] = [];
   try {
     const skillResult = await generateObject({
-      model: openai("gpt-5.2"),
+      model: openai("gpt-4o"),
       system: SKILL_DETECTION_PROMPT,
       prompt: `User prompt: "${prompt}"`,
       schema: z.object({
