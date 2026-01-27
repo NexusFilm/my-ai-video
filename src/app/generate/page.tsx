@@ -34,7 +34,7 @@ function GeneratePageContent() {
   const urlPresets = searchParams.get("presets");
   
   // Get images from sessionStorage
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>(() => {
+  const [uploadedImages] = useState<UploadedImage[]>(() => {
     if (typeof window !== "undefined") {
       const stored = sessionStorage.getItem("uploadedImages");
       if (stored) {
