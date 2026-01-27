@@ -187,11 +187,11 @@ function GeneratePageContent() {
         </Button>
       }
     >
-      <div className="flex-1 flex flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8 h-full overflow-hidden">
+      <div className="flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8">
         {/* Main content area with editor and player */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 min-h-0 overflow-hidden">
-          {/* Code Editor - scrollable */}
-          <div className="flex-1 lg:flex-[3] min-h-[300px] lg:min-h-0 overflow-hidden">
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 min-h-0">
+          {/* Code Editor */}
+          <div className="flex-1 lg:flex-[3] h-[600px]">
             <CodeEditor
               code={hasGeneratedOnce && !generationError ? code : ""}
               onChange={handleCodeChange}
@@ -200,8 +200,8 @@ function GeneratePageContent() {
             />
           </div>
           
-          {/* Video Player - scrollable */}
-          <div className="flex-1 lg:flex-[2.5] min-h-[300px] lg:min-h-0 overflow-auto">
+          {/* Video Player */}
+          <div className="flex-1 lg:flex-[2.5] h-full">
             <AnimationPlayer
               Component={generationError ? null : Component}
               durationInFrames={durationInFrames}
