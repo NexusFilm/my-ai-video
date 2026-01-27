@@ -63,6 +63,11 @@ function GeneratePageContent() {
   const [streamPhase, setStreamPhase] = useState<StreamPhase>(
     willAutoStart ? "reasoning" : "idle",
   );
+  const [generationProgress, setGenerationProgress] = useState<{
+    percent: number;
+    current: number;
+    total: number;
+  } | null>(null);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
@@ -203,6 +208,9 @@ function GeneratePageContent() {
 
   const handleStreamingChange = useCallback((streaming: boolean) => {
     setIsStreaming(streaming);
+      if (!streaming) {
+        setGenerationProgress(null);
+      }
     // Clear errors when starting a new generation
     if (streaming) {
       setGenerationError(null);
@@ -215,6 +223,10 @@ function GeneratePageContent() {
     },
     [],
   );
+
+    const handleProgressChange = useCallback((percent: number, total: number, current: number) => {
+      setGenerationProgress({ percent, total, current });
+    }, []);
 
   // Auto-trigger generation if prompt came from URL
   const promptInputRef = useRef<PromptInputRef>(null);
@@ -278,6 +290,7 @@ function GeneratePageContent() {
       ) : (
         <>
           <CheckCircle2 className="w-3 h-3" />
+                  generationProgress={generationProgress}
           <span>System Healthy</span>
         </>
       )}
@@ -313,6 +326,7 @@ function GeneratePageContent() {
               onChange={handleCodeChange}
               isStreaming={isStreaming}
               streamPhase={streamPhase}
+              generationProgress={generationProgress}
             />
           </div>
           
@@ -344,6 +358,7 @@ function GeneratePageContent() {
             onCodeGenerated={handleCodeChange}
             onStreamingChange={handleStreamingChange}
             onStreamPhaseChange={setStreamPhase}
+            onProgressChange={handleProgressChange}
             onError={handleError}
             prompt={prompt}
             onPromptChange={setPrompt}

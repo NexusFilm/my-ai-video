@@ -77,6 +77,7 @@ interface PromptInputProps {
   onCodeGenerated?: (code: string) => void;
   onStreamingChange?: (isStreaming: boolean) => void;
   onStreamPhaseChange?: (phase: StreamPhase) => void;
+  onProgressChange?: (progress: number, estimatedTotal: number, current: number) => void;
   onError?: (error: string, type: GenerationErrorType) => void;
   variant?: "landing" | "editor";
   prompt?: string;
@@ -293,6 +294,9 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         const decoder = new TextDecoder();
         let accumulatedText = "";
         let buffer = "";
+        
+        // Estimate total lines for progress tracking
+        const estimatedTotalLines = estimateCodeLength(enhancedPrompt);
 
         while (true) {
           const { done, value } = await reader.read();
@@ -325,6 +329,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                 let codeToShow = accumulatedText;
                 codeToShow = codeToShow.replace(/^```(?:tsx?|jsx?)?\n?/, "");
                 codeToShow = codeToShow.replace(/\n?```\s*$/, "");
+                
+                // Calculate progress based on accumulated lines
+                const currentLines = codeToShow.split('\n').length;
+                const progressPercent = Math.min(95, Math.round((currentLines / estimatedTotalLines) * 100));
+                onProgressChange?.(progressPercent, estimatedTotalLines, currentLines);
 
                 onCodeGenerated?.(codeToShow.trim());
               } else if (event.type === "error") {
@@ -347,6 +356,10 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 
         // Update the editor with the cleaned code
         onCodeGenerated?.(finalCode);
+        
+        // Report completion
+        const finalLines = finalCode.split('\n').length;
+        onProgressChange?.(100, estimatedTotalLines, finalLines);
 
         const validation = validateGptResponse(finalCode);
         if (!validation.isValid && validation.error) {

@@ -51,12 +51,39 @@ export function compileCode(code: string): CompilationResult {
   try {
     const preparedCode = prepareCode(code);
     
+    const formatContext = (source: string, line: number, radius = 2): string => {
+      const lines = source.split(/\n/);
+      const start = Math.max(0, line - 1 - radius);
+      const end = Math.min(lines.length, line - 1 + radius + 1);
+      return lines
+        .slice(start, end)
+        .map((l, idx) => `${start + idx + 1}: ${l}`)
+        .join("\n");
+    };
+    
+    const formatBabelError = (err: unknown): string => {
+      if (err && typeof err === "object" && "message" in err) {
+        const anyErr = err as { message: string; loc?: { line: number; column: number } };
+        if (anyErr.loc?.line) {
+          const ctx = formatContext(preparedCode, anyErr.loc.line);
+          return `${anyErr.message} (line ${anyErr.loc.line}, col ${anyErr.loc.column ?? 0})\n${ctx}`;
+        }
+        return String(anyErr.message);
+      }
+      return "Unknown compilation error";
+    };
+    
     // Transform JSX/TS to JS
-    const transpiled = Babel.transform(preparedCode, {
-      presets: ["react", "typescript"],
-      filename: "dynamic-animation.tsx",
-      retainLines: true,
-    });
+    let transpiled;
+    try {
+      transpiled = Babel.transform(preparedCode, {
+        presets: ["react", "typescript"],
+        filename: "dynamic-animation.tsx",
+        retainLines: true,
+      });
+    } catch (babelError) {
+      return { Component: null, error: formatBabelError(babelError) };
+    }
 
     if (!transpiled.code) {
       return { Component: null, error: "Transpilation failed" };
@@ -190,8 +217,12 @@ export function compileCode(code: string): CompilationResult {
 
     return { Component, error: null };
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown compilation error";
-    return { Component: null, error: errorMessage };
+    if (error instanceof Error) {
+      // Include top-of-stack location info when available
+      const stackLine = error.stack?.split("\n")[1]?.trim();
+      const detailed = stackLine ? `${error.message} (${stackLine})` : error.message;
+      return { Component: null, error: detailed };
+    }
+    return { Component: null, error: "Unknown compilation error" };
   }
 }

@@ -29,6 +29,11 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   isStreaming?: boolean;
   streamPhase?: StreamPhase;
+  generationProgress?: {
+    percent: number;
+    current: number;
+    total: number;
+  } | null;
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
@@ -36,6 +41,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onChange,
   isStreaming = false,
   streamPhase = "idle",
+  generationProgress = null,
 }) => {
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -279,8 +285,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           <StreamingOverlay
             visible={isStreaming}
             message={
-              streamPhase === "reasoning" ? "Thinking..." : "Generating code..."
+              streamPhase === "reasoning"
+                ? "AI is thinking..."
+                : streamPhase === "generating"
+                ? generationProgress
+                  ? `Generating code... ${generationProgress.percent}%`
+                  : "Generating code..."
+                : "Generating code..."
             }
+            progress={generationProgress}
           />
           <MonacoEditor
             height="100%"
