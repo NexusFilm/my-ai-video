@@ -144,7 +144,7 @@ function extractKeyPoints(html: string): string[] {
     }
   }
 
-  return [...new Set(points)].slice(0, 8); // Unique, limit to 8
+  return Array.from(new Set(points)).slice(0, 8); // Unique, limit to 8
 }
 
 function extractImages(
