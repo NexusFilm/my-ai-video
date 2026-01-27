@@ -86,14 +86,58 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         file,
         type: "asset",
         name: file.name,
-        uploadStatus: "success", // Blob URL is immediately available
-        publicUrl: URL.createObjectURL(file), // Use blob URL directly, no server upload needed
+        uploadStatus: "uploading",
       }));
 
       const allImages = [...images, ...newImages];
       onImagesChange(allImages);
+
+      // Upload each compressed file to server
+      newImages.forEach((image) => {
+        uploadFileToServer(image, allImages);
+      });
     },
     [images, onImagesChange]
+  );
+
+  const uploadFileToServer = useCallback(
+    async (image: UploadedImage, allImages: UploadedImage[]) => {
+      if (!image.file) return;
+
+      try {
+        const formData = new FormData();
+        formData.append("file", image.file, image.name);
+        
+        const response = await fetch("/api/upload-asset", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const publicUrl = data.url; // Now returns /api/assets/[id]
+
+        // Update with success status and HTTP URL
+        const successImages = allImages.map((img) =>
+          img.id === image.id
+            ? { ...img, uploadStatus: "success" as const, publicUrl }
+            : img
+        );
+        onImagesChange(successImages);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Upload failed";
+        const errorImages = allImages.map((img) =>
+          img.id === image.id
+            ? { ...img, uploadStatus: "error" as const, uploadError: errorMessage }
+            : img
+        );
+        onImagesChange(errorImages);
+      }
+    },
+    [onImagesChange]
   );
   const handleUrlSubmit = useCallback(() => {
     setUrlError("");

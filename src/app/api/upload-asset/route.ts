@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+
+// Store assets in-memory (for Vercel serverless, alternatives: Supabase, S3, etc.)
+const assetStore = new Map<string, { data: Buffer; type: string; name: string }>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,14 +25,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert to base64 for client-side storage
+    // Convert file to buffer and generate ID
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString('base64');
-    const dataUrl = `data:${file.type};base64,${base64}`;
+    const assetId = crypto.randomBytes(16).toString('hex');
+    
+    // Store in memory map
+    assetStore.set(assetId, {
+      data: buffer,
+      type: file.type,
+      name: file.name,
+    });
+
+    // Return a proper HTTP URL that can be accessed from anywhere
+    const assetUrl = `/api/assets/${assetId}`;
 
     return NextResponse.json({
-      url: dataUrl,
+      url: assetUrl,
       name: file.name,
       size: file.size,
       type: file.type,
@@ -40,4 +53,27 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// GET endpoint to serve stored assets
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/');
+  const assetId = pathParts[pathParts.length - 1];
+
+  const asset = assetStore.get(assetId);
+  if (!asset) {
+    return NextResponse.json(
+      { error: "Asset not found" },
+      { status: 404 }
+    );
+  }
+
+  return new NextResponse(new Uint8Array(asset.data), {
+    headers: {
+      'Content-Type': asset.type,
+      'Content-Length': asset.data.length.toString(),
+      'Cache-Control': 'public, max-age=86400', // 24 hour cache
+    },
+  });
 }

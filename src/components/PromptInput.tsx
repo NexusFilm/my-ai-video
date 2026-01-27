@@ -246,15 +246,15 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           referenceContext = analyses.filter(Boolean).join("\n\n");
         }
         
-        // Process asset images - blob URLs are already available from browser compression
+        // Process asset images - use HTTP URLs from server
         const assetData = await Promise.all(
           assets.map(async (asset) => {
             console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}`);
             
-            // Use the blob URL that was created when the image was compressed and loaded
-            if (asset.publicUrl) {
-              console.log(`✓ Using blob URL for asset: ${asset.name}`);
-              return { name: asset.name, url: asset.publicUrl, source: "blob-url" };
+            // Use the HTTP URL returned from the server after upload
+            if (asset.publicUrl && asset.publicUrl.startsWith("/api/")) {
+              console.log(`✓ Using server URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.publicUrl, source: "server-url" };
             }
             
             // For remote URLs, use them directly
@@ -275,6 +275,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         const appRules = `## APP RULES (always apply)
       - Use Remotion/React: generate a single component, keep imports intact
       - For images: use standard HTML <img> tags (lowercase), NEVER <Img> or Image components
+      - For audio: use 'new Audio()' constructor, NEVER 'Audio()' without new
       - Use provided assets (URLs) visibly in the animation with <img src="..."> syntax
       - Keep structure stable; make minimal edits when refining/fixing
       - Respect timing, easing, and positions requested by the user
@@ -291,7 +292,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 - Use ONLY standard HTML <img> tags (lowercase)
 - NEVER use <Img>, <Image>, or any component names for images
 - MUST use <img src="URL" /> syntax with provided URLs
-- Example: <img src="blob:https://..." style={{width: "200px", borderRadius: "50%"}} />
+- Example: <img src="/api/assets/..." style={{width: "200px", borderRadius: "50%"}} />
 - Position and animate images prominently in your design
 - Do not ignore or mark as "undefined"
 - Ensure images are visible and integrated into the animation`
