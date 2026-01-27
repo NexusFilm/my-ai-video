@@ -230,6 +230,16 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         const references = uploadedImages.filter(img => img.type === "reference");
         const assets = uploadedImages.filter(img => img.type === "asset");
         
+        // Log detected assets for verification
+        if (assets.length > 0) {
+          const assetNames = assets.map(a => a.name).join(", ");
+          console.log(`📦 Detected ${assets.length} asset(s) for this generation: ${assetNames}`);
+        }
+        if (references.length > 0) {
+          const refNames = references.map(r => r.name).join(", ");
+          console.log(`👁️ Detected ${references.length} reference image(s) for style guidance: ${refNames}`);
+        }
+        
         // Analyze reference images if any
         let referenceContext = "";
         if (references.length > 0) {
@@ -372,6 +382,16 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         if (codeContext) {
           // Use refine endpoint for context-aware editing or fixing
           endpoint = "/api/refine";
+          
+          // Log asset names for verification
+          if (assetData.length > 0) {
+            const assetNames = assetData.map(a => a.name).join(", ");
+            console.log(`🎬 Refining with ${assetData.length} asset(s): ${assetNames}`);
+            // Show in a UI toast would be nice too
+            onStreamingChange?.(true);
+            setTimeout(() => console.log(`✓ Asset names logged to help debug asset usage`), 100);
+          }
+          
           body = {
             currentCode: codeContext,
             refinementPrompt: enhancedPrompt,
