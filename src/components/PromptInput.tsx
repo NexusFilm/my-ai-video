@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { type UploadedImage } from "./ImageUploader";
 import { examplePrompts } from "@/examples/prompts";
 import {
   validateGptResponse,
@@ -93,6 +94,8 @@ interface PromptInputProps {
   aspectRatio?: "16:9" | "9:16";
   /** Motion blur setting */
   motionBlur?: number;
+  /** Uploaded images (references and assets) */
+  uploadedImages?: UploadedImage[];
 }
 
 export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
@@ -113,6 +116,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       onRefineModeChange,
       aspectRatio = "16:9",
       motionBlur = 0,
+      uploadedImages = [],
     },
     ref,
   ) {
@@ -160,22 +164,84 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       try {
         const provider = getModelProvider(model);
         
+        // Process uploaded images
+        const references = uploadedImages.filter(img => img.type === "reference");
+        const assets = uploadedImages.filter(img => img.type === "asset");
+        
+        // Analyze reference images if any
+        let referenceContext = "";
+        if (references.length > 0) {
+          onStreamPhaseChange?.("reasoning");
+          const analyses = await Promise.all(
+            references.map(async (ref) => {
+              try {
+                const response = await fetch("/api/analyze-reference", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    imageUrl: ref.url,
+                    userDescription: ref.description,
+                  }),
+                });
+                const data = await response.json();
+                return `Reference "${ref.name}": ${data.analysis}`;
+              } catch (err) {
+                console.error("Failed to analyze reference:", err);
+                return "";
+              }
+            })
+          );
+          referenceContext = analyses.filter(Boolean).join("\n\n");
+        }
+        
+        // Convert asset images to data URLs if needed
+        const assetData = await Promise.all(
+          assets.map(async (asset) => {
+            if (asset.file) {
+              const formData = new FormData();
+              formData.append("file", asset.file);
+              try {
+                const response = await fetch("/api/upload-asset", {
+                  method: "POST",
+                  body: formData,
+                });
+                const data = await response.json();
+                return { name: asset.name, dataUrl: data.dataUrl };
+              } catch (err) {
+                console.error("Failed to upload asset:", err);
+                return { name: asset.name, dataUrl: asset.url };
+              }
+            }
+            return { name: asset.name, dataUrl: asset.url };
+          })
+        );
+        
+        // Build enhanced prompt with image context
+        let enhancedPrompt = prompt;
+        if (referenceContext) {
+          enhancedPrompt = `${prompt}\n\n## REFERENCE IMAGES ANALYSIS:\n${referenceContext}`;
+        }
+        if (assetData.length > 0) {
+          const assetList = assetData.map(a => `- ${a.name}: Use this image in the animation`).join("\n");
+          enhancedPrompt += `\n\n## ASSETS TO USE:\n${assetList}\n\nEmbed these images using: <img src="${assetData[0].dataUrl}" />`;
+        }
+        
         // Determine which endpoint to use
         let endpoint = "/api/generate";
-        let body: Record<string, unknown> = { prompt, model };
+        let body: Record<string, unknown> = { prompt: enhancedPrompt, model };
         
         if (isRefineMode && currentCode) {
           // Use refine endpoint for context-aware editing
           endpoint = "/api/refine";
           body = {
             currentCode,
-            refinementPrompt: prompt,
+            refinementPrompt: enhancedPrompt,
             previousPrompts: getPromptHistory(),
           };
         } else if (provider === "google") {
           // Use Gemini endpoint
           endpoint = "/api/generate-gemini";
-          body = { prompt, model };
+          body = { prompt: enhancedPrompt, model };
         }
 
         const response = await fetch(endpoint, {

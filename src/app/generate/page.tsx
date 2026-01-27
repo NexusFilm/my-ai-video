@@ -13,6 +13,7 @@ import {
   type PromptInputRef,
   type GenerationErrorType,
 } from "../../components/PromptInput";
+import { ImageUploader, type UploadedImage } from "../../components/ImageUploader";
 import { examples } from "../../examples/code";
 import { useAnimationState } from "../../hooks/useAnimationState";
 
@@ -42,6 +43,7 @@ function GeneratePageContent() {
     type: GenerationErrorType;
   } | null>(null);
   const [isRefineMode, setIsRefineMode] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -156,20 +158,28 @@ function GeneratePageContent() {
           </div>
         </div>
 
-        <PromptInput
-          ref={promptInputRef}
-          onCodeGenerated={handleCodeChange}
-          onStreamingChange={handleStreamingChange}
-          onStreamPhaseChange={setStreamPhase}
-          onError={handleError}
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          currentCode={hasGeneratedOnce ? code : undefined}
-          isRefineMode={isRefineMode}
-          onRefineModeChange={setIsRefineMode}
-          aspectRatio={aspectRatio}
-          motionBlur={motionBlur}
-        />
+        <div className="space-y-4">
+          <ImageUploader
+            images={uploadedImages}
+            onImagesChange={setUploadedImages}
+          />
+          
+          <PromptInput
+            ref={promptInputRef}
+            onCodeGenerated={handleCodeChange}
+            onStreamingChange={handleStreamingChange}
+            onStreamPhaseChange={setStreamPhase}
+            onError={handleError}
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            currentCode={hasGeneratedOnce ? code : undefined}
+            isRefineMode={isRefineMode}
+            onRefineModeChange={setIsRefineMode}
+            aspectRatio={aspectRatio}
+            motionBlur={motionBlur}
+            uploadedImages={uploadedImages}
+          />
+        </div>
       </div>
     </PageLayout>
   );
