@@ -437,8 +437,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
               placeholder={isRefineMode ? "Describe what to change (e.g., 'make the text bigger', 'change color to blue')..." : "Describe your animation..."}
               className={`w-full bg-transparent text-foreground placeholder:text-muted-foreground-dim focus:outline-none resize-none overflow-y-auto ${
                 isLanding
-                  ? "text-base min-h-[60px] max-h-[200px]"
-                  : "text-sm min-h-[40px] max-h-[150px]"
+                  ? "text-base min-h-[60px] max-h-[300px]"
+                  : "text-sm min-h-[40px] max-h-[250px]"
               }`}
               style={{ fieldSizing: "content" }}
               disabled={isDisabled}
