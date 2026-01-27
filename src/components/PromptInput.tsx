@@ -246,15 +246,15 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           referenceContext = analyses.filter(Boolean).join("\n\n");
         }
         
-        // Process asset images - use HTTP URLs from server
+        // Process asset images - use data URLs that persist across requests
         const assetData = await Promise.all(
           assets.map(async (asset) => {
             console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}`);
             
-            // Use the HTTP URL returned from the server after upload
-            if (asset.publicUrl && asset.publicUrl.startsWith("/api/")) {
-              console.log(`✓ Using server URL for asset: ${asset.name}`);
-              return { name: asset.name, url: asset.publicUrl, source: "server-url" };
+            // Use the data URL returned from the server (contains full compressed image data)
+            if (asset.publicUrl && asset.publicUrl.startsWith("data:")) {
+              console.log(`✓ Using data URL for asset: ${asset.name} (size: ${(asset.publicUrl.length / 1024).toFixed(1)}KB)`);
+              return { name: asset.name, url: asset.publicUrl, source: "data-url" };
             }
             
             // For remote URLs, use them directly
@@ -293,7 +293,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 - Use ONLY standard HTML <img> tags (lowercase)
 - NEVER use <Img>, <Image>, or any component names for images
 - MUST use <img src="URL" /> syntax with provided URLs
-- Example: <img src="/api/assets/..." style={{width: "200px", borderRadius: "50%"}} />
+- Example: <img src="data:image/jpeg;base64,..." style={{width: "200px", borderRadius: "50%"}} />
 - Position and animate images prominently in your design
 - Do not ignore or mark as "undefined"
 - Ensure images are visible and integrated into the animation`
