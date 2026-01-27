@@ -84,6 +84,7 @@ function GeneratePageContent() {
   const [autoFixCount, setAutoFixCount] = useState(0);
   const [agentStatus, setAgentStatus] = useState<"idle" | "monitoring" | "fixing">("idle");
   const [userCancelled, setUserCancelled] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<{
     currentUsage: number;
     dailyLimit: number;
@@ -170,6 +171,14 @@ function GeneratePageContent() {
       return;
     }
     
+    // Stop auto-heal if rate limited - don't keep trying
+    if (isRateLimited) {
+      if (agentStatus === "fixing") {
+        setAgentStatus("idle");
+      }
+      return;
+    }
+    
     // Only auto-heal if enabled, not streaming, not compiling, and valid retry count
     if (!autoHealEnabled || isStreaming || isCompiling || autoFixCount >= MAX_AUTO_RETRIES) {
       if (!isStreaming && agentStatus === "fixing") {
@@ -207,7 +216,8 @@ function GeneratePageContent() {
     autoFixCount, 
     code,
     agentStatus,
-    userCancelled
+    userCancelled,
+    isRateLimited,
   ]);
 
   const handleCodeChange = useCallback(
@@ -258,6 +268,7 @@ function GeneratePageContent() {
     if (streaming) {
       setGenerationError(null);
       setUserCancelled(false);
+      setIsRateLimited(false);
     }
   }, []);
 
@@ -266,6 +277,7 @@ function GeneratePageContent() {
     setUserCancelled(true);
     setAgentStatus("idle");
     setAutoFixCount(0);
+    setIsRateLimited(false);
     justFinishedGenerationRef.current = false;
     promptInputRef.current?.cancelAll();
   }, []);
@@ -273,6 +285,15 @@ function GeneratePageContent() {
   const handleError = useCallback(
     (message: string, type: GenerationErrorType) => {
       setGenerationError({ message, type });
+      
+      // If this is a rate limit error, disable auto-heal
+      if (message.includes("Rate limit") || message.includes("rate limit")) {
+        setIsRateLimited(true);
+        // Auto-clear rate limit flag after 10 seconds so user can try again
+        setTimeout(() => {
+          setIsRateLimited(false);
+        }, 10000);
+      }
     },
     [],
   );
