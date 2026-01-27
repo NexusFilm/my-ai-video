@@ -11,7 +11,7 @@ import {
   BarChart3,
   Disc,
   Mic,
-  MicOff,
+  Square,
   Sparkles,
   X,
   Pencil,
@@ -512,11 +512,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                   variant="ghost"
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={isDisabled || isTranscribing}
-                  className={isRecording ? "text-red-500" : ""}
+                  className={isRecording ? "text-red-500 hover:text-red-400" : ""}
                   title={isRecording ? "Stop recording" : "Voice input"}
                 >
                   {isRecording ? (
-                    <MicOff className="w-5 h-5" />
+                    <Square className="w-4 h-4 fill-current" />
                   ) : (
                     <Mic className="w-5 h-5" />
                   )}
