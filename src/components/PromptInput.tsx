@@ -70,6 +70,7 @@ export type GenerationErrorType = "validation" | "api";
 
 export interface PromptInputRef {
   triggerGeneration: () => void;
+  triggerFix: (code: string, error: string) => void;
 }
 
 interface PromptInputProps {
@@ -153,8 +154,9 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       return JSON.parse(localStorage.getItem("promptHistory") || "[]");
     };
 
-    const runGeneration = async () => {
-      if (!prompt.trim() || isLoading) return;
+    const runGeneration = async (overridePrompt?: string, overrideCode?: string) => {
+      const activePrompt = overridePrompt || prompt;
+      if (!activePrompt.trim() || isLoading) return;
 
       // Cancel any existing request
       if (abortControllerRef.current) {
@@ -222,16 +224,16 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         );
         
         // Build enhanced prompt with image context
-        let enhancedPrompt = prompt;
+        let enhancedPrompt = activePrompt;
         
         // Apply style preset enhancements
-        if (selectedPresets.length > 0) {
+        if (selectedPresets.length > 0 && !overridePrompt) {
           const presetEnhancement = getPresetEnhancement(selectedPresets);
-          enhancedPrompt = `${presetEnhancement}\n\n## USER REQUEST:\n${prompt}`;
+          enhancedPrompt = `${presetEnhancement}\n\n## USER REQUEST:\n${activePrompt}`;
           
           // If Vox mode is selected, apply Vox specialist system
           if (selectedPresets.includes("vox")) {
-            enhancedPrompt = getVoxModePrompt(prompt);
+            enhancedPrompt = getVoxModePrompt(activePrompt);
           }
         }
         
@@ -247,11 +249,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         let endpoint = "/api/generate";
         let body: Record<string, unknown> = { prompt: enhancedPrompt, model };
         
-        if (isRefineMode && currentCode) {
-          // Use refine endpoint for context-aware editing
+        // Use the overridden code (for auto-fix) or the current code (for refinement)
+        const codeContext = overrideCode || (isRefineMode ? currentCode : undefined);
+        
+        if (codeContext) {
+          // Use refine endpoint for context-aware editing or fixing
           endpoint = "/api/refine";
           body = {
-            currentCode,
+            currentCode: codeContext,
             refinementPrompt: enhancedPrompt,
             previousPrompts: getPromptHistory(),
           };
@@ -378,7 +383,13 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 
     // Expose triggerGeneration via ref
     useImperativeHandle(ref, () => ({
-      triggerGeneration: runGeneration,
+      triggerGeneration: () => runGeneration(),
+      triggerFix: (code: string, error: string) => {
+        const fixPrompt = `Fix the following Remotion code which produced this error:\n\nError: ${error}\n\nCode:\n${code}\n\nPlease fix the error while maintaining the original functionality.`;
+        // We pass the code as a second argument to runGeneration, which will cause it to use the /api/refine endpoint
+        // effectively treating this as a refinement/fix operation
+        runGeneration(fixPrompt, code);
+      }
     }));
 
     const startRecording = async () => {
