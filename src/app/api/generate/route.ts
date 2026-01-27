@@ -382,47 +382,71 @@ import { useState, useEffect } from "react";
 
 ## USING ASSETS & IMAGES (CRITICAL - DO NOT SKIP)
 
-If you receive asset images in the prompt (look for "## ASSET DATA URLS" section):
-1. **EXTRACT the DATA_URL values** - they are in format: DATA_URL: data:image/png;base64,... or data:image/jpeg;base64,...
-2. **COPY the exact DATA_URL value** into a JavaScript string constant
-3. **Create named constants** for each asset at the top of your component, right after hooks:
-   - const AVATAR_SRC = "data:image/...";  // COPY THE EXACT DATA_URL HERE
-   - const LOGO = "data:image/...";        // COPY THE EXACT DATA_URL HERE
-4. **Use these constants in img tags**: <img src={AVATAR_SRC} style={{...}} />
-5. **Do NOT leave constants as "undefined"** - if an image is provided, it MUST have its data URL
-6. **Position and style assets prominently** - they are critical user content
-7. **Do NOT ignore provided assets** - every asset in the ASSET DATA section must be used
+If you receive asset URLs in the prompt (look for "## REQUIRED ASSETS TO INTEGRATE" section):
+1. **EXTRACT the URL values** - they are in format: /uploads/filename.jpg or https://...
+2. **Import Remotion's staticFile and Img** at the top:
+   \`\`\`jsx
+   import { Img, staticFile } from 'remotion';
+   \`\`\`
+3. **Use staticFile() for uploaded assets** (saved to /public/uploads/):
+   - For uploads: \`<Img src={staticFile('/uploads/filename.jpg')} style={{...}} />\`
+   - For external URLs: \`<Img src="https://external-url.com/image.jpg" style={{...}} />\`
+4. **Style with Remotion's Img component** (not plain <img>):
+   \`\`\`jsx
+   <Img 
+     src={staticFile('/uploads/photo.jpg')} 
+     style={{
+       width: '100%',
+       height: 'auto',
+       objectFit: 'cover',
+       borderRadius: '10px'
+     }} 
+   />
+   \`\`\`
+5. **Position and animate assets prominently** - they are critical user content
+6. **Do NOT ignore provided assets** - every asset listed must be used
 
 WHAT DOES NOT WORK (DO NOT DO THIS):
-- const AVATAR_SRC = "undefined";  ❌ WRONG - will show broken image
-- const AVATAR_SRC = "[dataUrl]";  ❌ WRONG - use the literal value
-- Ignoring assets in the ASSET DATA section ❌ WRONG - use them
+- Using bare URLs without staticFile: \`<img src="/uploads/file.jpg" />\` ❌ WRONG
+- Not using Img component: \`<img src={...} />\` ❌ WRONG - use Remotion's <Img />
+- Ignoring assets in the REQUIRED ASSETS section ❌ WRONG - use them all
 
 WHAT WORKS (DO THIS):
-- const AVATAR_SRC = "data:image/png;base64,iVBORw0KGgo..."; ✅ CORRECT
-- <img src={AVATAR_SRC} style={{width: 100, height: 100}} /> ✅ CORRECT
+- \`import { Img, staticFile } from 'remotion';\` ✅ CORRECT
+- \`<Img src={staticFile('/uploads/photo.jpg')} style={{...}} />\` ✅ CORRECT
+- \`<Img src="https://example.com/image.jpg" style={{...}} />\` ✅ CORRECT
+- Position assets prominently in AbsoluteFill or Sequence ✅ CORRECT
 
 EXAMPLE - If you receive:
 \`\`\`
-ASSET 1: avatar.jpg
-VAR_NAME: AVATAR_SRC
-DATA_URL: data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD...
+## REQUIRED ASSETS TO INTEGRATE (1 assets provided):
+1. "logo.png" → /uploads/1234567-abcdef.png
 \`\`\`
 
 Then your code must have:
 \`\`\`tsx
-const AVATAR_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD...";
+import { AbsoluteFill, Img, staticFile } from 'remotion';
 
-return (
-  <AbsoluteFill>
-    <img src={AVATAR_SRC} style={{width: 120, height: 120, borderRadius: "50%"}} />
-  </AbsoluteFill>
-);
+export const MyAnimation = () => {
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      <Img 
+        src={staticFile('/uploads/1234567-abcdef.png')} 
+        style={{
+          width: 300,
+          height: 300,
+          objectFit: 'cover',
+          borderRadius: '50%'
+        }} 
+      />
+    </AbsoluteFill>
+  );
+};
 \`\`\`
 
 ## CRITICAL RULE: ASSETS ARE REQUIRED
 
-If the user provided images, they MUST appear in your animation. Do not use "undefined" or leave them out.
+If the user provided images, they MUST appear in your animation visibly. Do not ignore them or mark them as "undefined".
 
 ## RESERVED NAMES (CRITICAL)
 
