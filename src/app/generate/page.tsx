@@ -3,7 +3,15 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import type { NextPage } from "next";
 import { useSearchParams } from "next/navigation";
-import { Loader2, FolderOpen, Sparkles, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  FolderOpen,
+  Sparkles,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { CodeEditor } from "../../components/CodeEditor";
 import { AnimationPlayer } from "../../components/AnimationPlayer";
 import { PageLayout } from "../../components/PageLayout";
@@ -29,10 +37,13 @@ function GeneratePageContent() {
   const willAutoStart = Boolean(initialPrompt);
 
   // Get settings from URL params
-  const urlAspectRatio = searchParams.get("aspectRatio") as "16:9" | "9:16" | null;
+  const urlAspectRatio = searchParams.get("aspectRatio") as
+    | "16:9"
+    | "9:16"
+    | null;
   const urlMotionBlur = searchParams.get("motionBlur");
   const urlPresets = searchParams.get("presets");
-  
+
   // Get images from sessionStorage
   const [uploadedImages] = useState<UploadedImage[]>(() => {
     if (typeof window !== "undefined") {
@@ -54,10 +65,10 @@ function GeneratePageContent() {
   );
   const [fps, setFps] = useState(examples[0]?.fps || 30);
   const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">(
-    urlAspectRatio || "16:9"
+    urlAspectRatio || "16:9",
   );
   const [motionBlur, setMotionBlur] = useState(
-    urlMotionBlur ? parseInt(urlMotionBlur, 10) : 0
+    urlMotionBlur ? parseInt(urlMotionBlur, 10) : 0,
   );
   const [isStreaming, setIsStreaming] = useState(willAutoStart);
   const [streamPhase, setStreamPhase] = useState<StreamPhase>(
@@ -78,11 +89,14 @@ function GeneratePageContent() {
   const [isRefineMode, setIsRefineMode] = useState(false);
   const selectedPresets = urlPresets ? urlPresets.split(",") : [];
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
-  
-  // Agent Brain state
-  const [autoHealEnabled, setAutoHealEnabled] = useState(true);
-  const [autoFixCount, setAutoFixCount] = useState(0);
-  const [agentStatus, setAgentStatus] = useState<"idle" | "monitoring" | "fixing">("idle");
+
+  // Agent Brain state - now shows suggestions instead of auto-fixing
+  const [suggestedFix, setSuggestedFix] = useState<{
+    fixedCode: string;
+    explanation: string;
+    linesChanged: number[];
+  } | null>(null);
+  const [isAnalyzingError, setIsAnalyzingError] = useState(false);
   const [userCancelled, setUserCancelled] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<{
@@ -92,10 +106,6 @@ function GeneratePageContent() {
     warning?: string;
     overLimit: boolean;
   } | null>(null);
-  const MAX_AUTO_RETRIES = 2;
-  
-  // Track error history to detect repeating/unfixable errors
-  const lastFixedErrorRef = useRef<string>("");
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -139,104 +149,95 @@ function GeneratePageContent() {
     const wasStreaming = isStreamingRef.current;
     isStreamingRef.current = isStreaming;
 
-    // Reset agent when starting new generation
+    // Clear suggested fix when starting new generation
     if (isStreaming) {
-      setAgentStatus("monitoring");
-      // Only reset retry count if this is a fresh user prompt, not a fix attempt
-      // We can infer it's a fix attempt if we are in "fixing" status
-      if (agentStatus !== "fixing") {
-        setAutoFixCount(0);
-      }
+      setSuggestedFix(null);
     }
 
     // Compile when streaming ends
     if (wasStreaming && !isStreaming) {
       compileCode(codeRef.current);
       justFinishedGenerationRef.current = true;
-      
+
       // Check for errors after a brief delay to allow compilation to finish
-      // and state to update
       setTimeout(() => {
         if (justFinishedGenerationRef.current) {
           justFinishedGenerationRef.current = false;
         }
       }, 2000);
     }
-  }, [isStreaming, compileCode, agentStatus]);
+  }, [isStreaming, compileCode]);
 
-  // Agent Brain: Auto-heal errors
-  useEffect(() => {
-    // Don't auto-heal if user cancelled
-    if (userCancelled) {
-      if (agentStatus === "fixing") {
-        setAgentStatus("idle");
-      }
-      return;
-    }
-    
-    // Stop auto-heal if rate limited - don't keep trying
-    if (isRateLimited) {
-      if (agentStatus === "fixing") {
-        setAgentStatus("idle");
-      }
-      return;
-    }
-    
-    // Only auto-heal if enabled, not streaming, not compiling, and valid retry count
-    if (!autoHealEnabled || isStreaming || isCompiling || autoFixCount >= MAX_AUTO_RETRIES) {
-      if (!isStreaming && agentStatus === "fixing") {
-        setAgentStatus("idle");
-      }
-      return;
-    }
+  // Analyze error and get suggestion (but don't auto-apply)
+  const analyzeError = useCallback(
+    async (errorMessage: string) => {
+      if (isAnalyzingError || !errorMessage) return;
 
-    // Check if we have an error (either compilation or generation API error)
-    const currentError = generationError?.message || error;
-    
-    // Check if this is the same error we just tried to fix (unfixable error)
-    // If so, don't keep trying - the AI can't fix hallucinations
-    if (currentError && lastFixedErrorRef.current === currentError) {
-      console.log("Same error repeated - stopping auto-heal (unfixable):", currentError);
-      if (agentStatus === "fixing") {
-        setAgentStatus("idle");
+      setIsAnalyzingError(true);
+      setSuggestedFix(null);
+
+      try {
+        const response = await fetch("/api/quick-fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, error: errorMessage }),
+        });
+
+        if (response.status === 429) {
+          const errorData = await response.json();
+          setIsRateLimited(true);
+          setGenerationError({
+            message: `Rate limited: ${errorData.error}`,
+            type: "api",
+          });
+          setTimeout(() => setIsRateLimited(false), 10000);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to analyze error");
+        }
+
+        const result = await response.json();
+
+        if (result.fixedCode && result.linesChanged?.length > 0) {
+          setSuggestedFix({
+            fixedCode: result.fixedCode,
+            explanation: result.explanation,
+            linesChanged: result.linesChanged,
+          });
+        } else {
+          setSuggestedFix({
+            fixedCode: "",
+            explanation:
+              result.explanation || "Unable to suggest a fix for this error.",
+            linesChanged: [],
+          });
+        }
+      } catch (err) {
+        console.error("Error analyzing:", err);
+        setSuggestedFix({
+          fixedCode: "",
+          explanation:
+            "Failed to analyze the error. Try manually fixing or regenerating.",
+          linesChanged: [],
+        });
+      } finally {
+        setIsAnalyzingError(false);
       }
-      return;
+    },
+    [code, isAnalyzingError],
+  );
+
+  // Apply the suggested fix
+  const applySuggestedFix = useCallback(() => {
+    if (suggestedFix?.fixedCode) {
+      setCode(suggestedFix.fixedCode);
+      compileCode(suggestedFix.fixedCode);
+      setSuggestedFix(null);
+      setGenerationError(null);
     }
-    
-    // Only fix errors that appear right after generation (to avoid interrupting manual editing)
-    if (currentError && justFinishedGenerationRef.current) {
-      console.log("Agent detected error, attempting auto-fix...", currentError);
-      
-      // Mark generation as handled so we don't loop immediately
-      justFinishedGenerationRef.current = false;
-      
-      // Track this error so we know if it repeats
-      lastFixedErrorRef.current = currentError;
-      
-      setAgentStatus("fixing");
-      setAutoFixCount(prev => prev + 1);
-      
-      // Trigger the fix
-      promptInputRef.current?.triggerFix(code, currentError);
-      
-      // Show a toast or status would be nice here, but we'll use the agent status indicator
-    } else if (!currentError && !isStreaming) {
-      setAgentStatus("idle");
-      // Clear error tracking when error is resolved
-      lastFixedErrorRef.current = "";
-    }
-  }, [
-    autoHealEnabled,
-    isStreaming, 
-    isCompiling, 
-    error, 
-    generationError, 
-    autoFixCount, 
-    code,
-    agentStatus,
-    userCancelled,
-    isRateLimited,
-  ]);
+  }, [suggestedFix, setCode, compileCode]);
 
   const handleCodeChange = useCallback(
     (newCode: string) => {
@@ -282,22 +283,20 @@ function GeneratePageContent() {
     if (!streaming) {
       setGenerationProgress(null);
     }
-    // Clear errors and reset cancelled state when starting a new generation
+    // Clear errors and reset state when starting a new generation
     if (streaming) {
       setGenerationError(null);
       setUserCancelled(false);
       setIsRateLimited(false);
-      setAutoFixCount(0);
-      lastFixedErrorRef.current = ""; // Reset error tracking for new generation
+      setSuggestedFix(null);
     }
   }, []);
 
   // Handle user clicking cancel button
   const handleCancel = useCallback(() => {
     setUserCancelled(true);
-    setAgentStatus("idle");
-    setAutoFixCount(0);
     setIsRateLimited(false);
+    setSuggestedFix(null);
     justFinishedGenerationRef.current = false;
     promptInputRef.current?.cancelAll();
   }, []);
@@ -305,7 +304,7 @@ function GeneratePageContent() {
   const handleError = useCallback(
     (message: string, type: GenerationErrorType) => {
       setGenerationError({ message, type });
-      
+
       // If this is a rate limit error, disable auto-heal
       if (message.includes("Rate limit") || message.includes("rate limit")) {
         setIsRateLimited(true);
@@ -318,9 +317,12 @@ function GeneratePageContent() {
     [],
   );
 
-    const handleProgressChange = useCallback((percent: number, total: number, current: number) => {
+  const handleProgressChange = useCallback(
+    (percent: number, total: number, current: number) => {
       setGenerationProgress({ percent, total, current });
-    }, []);
+    },
+    [],
+  );
 
   // Auto-trigger generation if prompt came from URL
   const promptInputRef = useRef<PromptInputRef>(null);
@@ -335,72 +337,47 @@ function GeneratePageContent() {
     }
   }, [initialPrompt, hasAutoStarted]);
 
-  const handleLoadProject = useCallback((project: Project) => {
-    setCode(project.code);
-    setPrompt(project.prompt);
-    setDurationInFrames(project.settings.durationInFrames);
-    setFps(project.settings.fps);
-    setAspectRatio(project.settings.aspectRatio);
-    setMotionBlur(project.settings.motionBlur);
-    setHasGeneratedOnce(true);
-    compileCode(project.code);
-  }, [setCode, compileCode]);
+  const handleLoadProject = useCallback(
+    (project: Project) => {
+      setCode(project.code);
+      setPrompt(project.prompt);
+      setDurationInFrames(project.settings.durationInFrames);
+      setFps(project.settings.fps);
+      setAspectRatio(project.settings.aspectRatio);
+      setMotionBlur(project.settings.motionBlur);
+      setHasGeneratedOnce(true);
+      compileCode(project.code);
+    },
+    [setCode, compileCode],
+  );
 
   // Initialize storage on mount
   useEffect(() => {
     projectStorage.init().catch(console.error);
   }, []);
 
-  // Agent Status Indicator component
-  const AgentStatusIndicator = (
-    <button
-      onClick={() => setAutoHealEnabled(!autoHealEnabled)}
-      className={`relative rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium transition-all ${
-        !autoHealEnabled
-          ? "bg-gray-500/10 text-gray-500 border border-gray-500/20"
-          : agentStatus === "fixing" 
-          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
-          : agentStatus === "monitoring"
-          ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
-          : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-      }`}
-      title={autoHealEnabled ? "Click to disable auto-heal" : "Click to enable auto-heal"}
-    >
-      {!autoHealEnabled ? (
-        <>
-          <AlertCircle className="w-3 h-3" />
-          <span>Agent Off</span>
-        </>
-      ) : agentStatus === "fixing" ? (
-        <>
-          <RefreshCw className="w-3 h-3 animate-spin" />
-          <span>Agent Fixing...</span>
-        </>
-      ) : agentStatus === "monitoring" ? (
-        <>
-          <Sparkles className="w-3 h-3" />
-          <span>Agent Monitoring</span>
-        </>
-      ) : (
-        <>
-          <CheckCircle2 className="w-3 h-3" />
-          <span>System Healthy</span>
-        </>
-      )}
-    </button>
-  );
+  // Status Indicator - shows when analyzing errors
+  const StatusIndicator = isAnalyzingError ? (
+    <div className="rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
+      <RefreshCw className="w-3 h-3 animate-spin" />
+      <span>Analyzing Error...</span>
+    </div>
+  ) : null;
 
   // Token Usage Indicator
   const UsageIndicator = tokenUsage && (
-    <div 
+    <div
       className={`rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium ${
         tokenUsage.overLimit
           ? "bg-red-500/10 text-red-500 border border-red-500/20"
           : tokenUsage.percentUsed >= 80
-          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-          : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+            ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+            : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
       }`}
-      title={tokenUsage.warning || `${tokenUsage.currentUsage.toLocaleString()} / ${tokenUsage.dailyLimit.toLocaleString()} tokens used today`}
+      title={
+        tokenUsage.warning ||
+        `${tokenUsage.currentUsage.toLocaleString()} / ${tokenUsage.dailyLimit.toLocaleString()} tokens used today`
+      }
     >
       <span>
         {tokenUsage.overLimit ? "⚠️ " : ""}
@@ -410,15 +387,15 @@ function GeneratePageContent() {
   );
 
   return (
-    <PageLayout 
+    <PageLayout
       showLogoAsLink
       rightContent={
         <div className="flex items-center gap-3">
           {/* Token Usage Indicator */}
           {UsageIndicator}
-          
-          {/* Agent Status Indicator */}
-          {AgentStatusIndicator}
+
+          {/* Status Indicator - shows when analyzing */}
+          {StatusIndicator}
 
           <Button
             onClick={() => setProjectsPanelOpen(true)}
@@ -444,7 +421,7 @@ function GeneratePageContent() {
               generationProgress={generationProgress}
             />
           </div>
-          
+
           {/* Video Player */}
           <div className="flex-1 lg:flex-[2.5] min-h-[400px]">
             <AnimationPlayer
@@ -486,26 +463,89 @@ function GeneratePageContent() {
             uploadedImages={uploadedImages}
             selectedPresets={selectedPresets}
           />
-          
-          {/* Auto-fix helper */}
-          {generationError && (
-            <div className="mt-4 flex justify-center">
-              <Button
-                size="sm"
-                variant="destructive"
-                className="shadow-lg"
-                onClick={() => {
-                  promptInputRef.current?.triggerFix(code, generationError.message);
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                  </span>
-                  Auto-Fix Error
+
+          {/* Error Fix Suggestion UI */}
+          {(generationError || error) && !isStreaming && (
+            <div className="mt-4 bg-background-elevated border border-red-500/30 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-red-400 font-medium mb-2">
+                    Error Detected
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-3 font-mono break-all">
+                    {generationError?.message || error}
+                  </p>
+
+                  {/* Show suggestion if available */}
+                  {suggestedFix && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-emerald-500" />
+                        <span className="text-sm text-emerald-400 font-medium">
+                          AI Suggestion
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        {suggestedFix.explanation}
+                      </p>
+                      {suggestedFix.linesChanged.length > 0 && (
+                        <p className="text-xs text-muted-foreground-dim">
+                          Lines to fix: {suggestedFix.linesChanged.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    {!suggestedFix && !isAnalyzingError && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                        onClick={() =>
+                          analyzeError(generationError?.message || error || "")
+                        }
+                      >
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Get AI Suggestion
+                      </Button>
+                    )}
+
+                    {isAnalyzingError && (
+                      <Button size="sm" variant="outline" disabled>
+                        <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                        Analyzing...
+                      </Button>
+                    )}
+
+                    {suggestedFix?.fixedCode && (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={applySuggestedFix}
+                      >
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Apply Fix
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setGenerationError(null);
+                        setSuggestedFix(null);
+                      }}
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Dismiss
+                    </Button>
+                  </div>
                 </div>
-              </Button>
+              </div>
             </div>
           )}
         </div>
