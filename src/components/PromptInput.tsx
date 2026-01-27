@@ -356,8 +356,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             setTimeout(() => console.log(`✓ Asset names logged to help debug asset usage`), 100);
           }
           
+          // Strip ASSET_URLS before sending to refine endpoint to avoid sending massive base64 strings
+          const codeForRefine = codeContext.replace(
+            /const\s+ASSET_URLS\s*=\s*\{[\s\S]*?\};\s*/g,
+            ""
+          );
+          
           body = {
-            currentCode: codeContext,
+            currentCode: codeForRefine,
             refinementPrompt: enhancedPrompt,
             previousPrompts: getPromptHistory(),
           };
@@ -464,23 +470,37 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
               return `  '${a.name}': '${escapedUrl}'`;
             })
             .join(",\n");
-          const assetConstant = `const ASSET_URLS = {\n${assetEntries}\n};\n\n`;
+          const assetConstant = `const ASSET_URLS = {\n${assetEntries}\n};\n`;
           
-          // Find where to insert - after the last import statement
-          const lastImportMatch = finalCode.lastIndexOf('from "');
-          const lastImportEnd = finalCode.indexOf('\n', lastImportMatch) + 1;
+          // Find where to insert - after ALL import statements
+          // Look for the pattern: } from "..." or import ... from "...";
+          // We need to find the LAST line that ends with );
+          let lastImportEndIndex = -1;
           
-          if (lastImportEnd > 0) {
-            // Insert after the last import
-            finalCode = finalCode.slice(0, lastImportEnd) + "\n" + assetConstant + finalCode.slice(lastImportEnd);
+          // Find all lines that contain 'from "' and track the last semicolon after them
+          const lines = finalCode.split('\n');
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i].trim();
+            if (line.includes('from "') && line.includes(';')) {
+              // Found a complete import statement
+              lastImportEndIndex = finalCode.lastIndexOf(line) + line.length;
+              break;
+            }
+          }
+          
+          if (lastImportEndIndex > 0) {
+            // Insert after the last complete import statement
+            const nextNewlineIndex = finalCode.indexOf('\n', lastImportEndIndex);
+            const insertIndex = nextNewlineIndex > lastImportEndIndex ? nextNewlineIndex + 1 : lastImportEndIndex;
+            finalCode = finalCode.slice(0, insertIndex) + "\n" + assetConstant + "\n" + finalCode.slice(insertIndex);
           } else {
             // Fallback: insert before export
             const exportIndex = finalCode.indexOf('export ');
             if (exportIndex !== -1) {
-              finalCode = finalCode.slice(0, exportIndex) + assetConstant + finalCode.slice(exportIndex);
+              finalCode = finalCode.slice(0, exportIndex) + assetConstant + "\n" + finalCode.slice(exportIndex);
             } else {
               // If no export found, prepend to the code
-              finalCode = assetConstant + finalCode;
+              finalCode = assetConstant + "\n" + finalCode;
             }
           }
           console.log(`✓ Injected ASSET_URLS constant with ${assetData.length} image(s)`);
@@ -579,10 +599,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           onStreamingChange?.(true);
           onStreamPhaseChange?.("reasoning");
           
+          // Strip out ASSET_URLS constant before sending to fix endpoint
+          // This prevents sending 700KB+ of base64 data to the API
+          const codeWithoutAssets = code.replace(
+            /const\s+ASSET_URLS\s*=\s*\{[\s\S]*?\};\s*/g,
+            ""
+          );
+          
           const response = await fetch("/api/quick-fix", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, error }),
+            body: JSON.stringify({ code: codeWithoutAssets, error }),
             signal: quickFixAbortRef.current.signal,
           });
           
