@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { NextPage } from "next";
 import { useRouter } from "next/navigation";
 import { PromptInput, type ModelId } from "@/components/PromptInput";
@@ -17,20 +17,63 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { AccordionItem } from "@/components/ui/accordion";
 
+const STORAGE_KEY = "landing-page-state";
+
+interface SavedState {
+  prompt: string;
+  selectedPresets: string[];
+  aspectRatio: "16:9" | "9:16";
+  motionBlur: number;
+}
+
 const Home: NextPage = () => {
   const router = useRouter();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">("16:9");
   const [motionBlur, setMotionBlur] = useState(0);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  const handleNavigate = (prompt: string, model: ModelId) => {
+  // Load saved state on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+        if (state.prompt) setPrompt(state.prompt);
+        if (state.selectedPresets) setSelectedPresets(state.selectedPresets);
+        if (state.aspectRatio) setAspectRatio(state.aspectRatio);
+        if (state.motionBlur !== undefined) setMotionBlur(state.motionBlur);
+      }
+    } catch (e) {
+      console.error("Failed to load saved state:", e);
+    }
+    setIsHydrated(true);
+  }, []);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (!isHydrated) return;
+    const state: SavedState = {
+      prompt,
+      selectedPresets,
+      aspectRatio,
+      motionBlur,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [prompt, selectedPresets, aspectRatio, motionBlur, isHydrated]);
+
+  const handleNavigate = (submittedPrompt: string, model: ModelId) => {
     setIsNavigating(true);
+    
+    // Clear saved state on navigation
+    localStorage.removeItem(STORAGE_KEY);
     
     // Encode all settings in URL params
     const params = new URLSearchParams({ 
-      prompt, 
+      prompt: submittedPrompt, 
       model,
       aspectRatio,
       motionBlur: motionBlur.toString(),
@@ -127,6 +170,8 @@ const Home: NextPage = () => {
         <div className="w-full">
           <PromptInput
             variant="landing"
+            prompt={prompt}
+            onPromptChange={setPrompt}
             onNavigate={handleNavigate}
             isNavigating={isNavigating}
             showCodeExamplesLink
