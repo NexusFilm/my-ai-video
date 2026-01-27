@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import type { NextPage } from "next";
 import { useSearchParams } from "next/navigation";
-import { Loader2, FolderOpen } from "lucide-react";
+import { Loader2, FolderOpen, Sparkles, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { CodeEditor } from "../../components/CodeEditor";
 import { AnimationPlayer } from "../../components/AnimationPlayer";
 import { PageLayout } from "../../components/PageLayout";
@@ -73,6 +73,12 @@ function GeneratePageContent() {
   const [isRefineMode, setIsRefineMode] = useState(false);
   const selectedPresets = urlPresets ? urlPresets.split(",") : [];
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
+  
+  // Agent Brain state
+  const [autoHealEnabled, setAutoHealEnabled] = useState(true);
+  const [autoFixCount, setAutoFixCount] = useState(0);
+  const [agentStatus, setAgentStatus] = useState<"idle" | "monitoring" | "fixing">("idle");
+  const MAX_AUTO_RETRIES = 2;
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -82,6 +88,7 @@ function GeneratePageContent() {
 
   const isStreamingRef = useRef(isStreaming);
   const codeRef = useRef(code);
+  const justFinishedGenerationRef = useRef(false);
 
   useEffect(() => {
     codeRef.current = code;
@@ -91,11 +98,71 @@ function GeneratePageContent() {
     const wasStreaming = isStreamingRef.current;
     isStreamingRef.current = isStreaming;
 
+    // Reset agent when starting new generation
+    if (isStreaming) {
+      setAgentStatus("monitoring");
+      // Only reset retry count if this is a fresh user prompt, not a fix attempt
+      // We can infer it's a fix attempt if we are in "fixing" status
+      if (agentStatus !== "fixing") {
+        setAutoFixCount(0);
+      }
+    }
+
     // Compile when streaming ends
     if (wasStreaming && !isStreaming) {
       compileCode(codeRef.current);
+      justFinishedGenerationRef.current = true;
+      
+      // Check for errors after a brief delay to allow compilation to finish
+      // and state to update
+      setTimeout(() => {
+        if (justFinishedGenerationRef.current) {
+          justFinishedGenerationRef.current = false;
+        }
+      }, 2000);
     }
-  }, [isStreaming, compileCode]);
+  }, [isStreaming, compileCode, agentStatus]);
+
+  // Agent Brain: Auto-heal errors
+  useEffect(() => {
+    // Only auto-heal if enabled, not streaming, not compiling, and valid retry count
+    if (!autoHealEnabled || isStreaming || isCompiling || autoFixCount >= MAX_AUTO_RETRIES) {
+      if (!isStreaming && agentStatus === "fixing") {
+        setAgentStatus("idle");
+      }
+      return;
+    }
+
+    // Check if we have an error (either compilation or generation API error)
+    const currentError = generationError?.message || error;
+    
+    // Only fix errors that appear right after generation (to avoid interrupting manual editing)
+    if (currentError && justFinishedGenerationRef.current) {
+      console.log("Agent detected error, attempting auto-fix...", currentError);
+      
+      // Mark generation as handled so we don't loop immediately
+      justFinishedGenerationRef.current = false;
+      
+      setAgentStatus("fixing");
+      setAutoFixCount(prev => prev + 1);
+      
+      // Trigger the fix
+      promptInputRef.current?.triggerFix(code, currentError);
+      
+      // Show a toast or status would be nice here, but we'll use the agent status indicator
+    } else if (!currentError && !isStreaming) {
+      setAgentStatus("idle");
+    }
+  }, [
+    autoHealEnabled,
+    isStreaming, 
+    isCompiling, 
+    error, 
+    generationError, 
+    autoFixCount, 
+    code,
+    agentStatus
+  ]);
 
   const handleCodeChange = useCallback(
     (newCode: string) => {
@@ -105,6 +172,11 @@ function GeneratePageContent() {
       // Clear existing debounce
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+      }
+
+      // If user edits manually, stop auto-fixing logic for this session
+      if (!isStreamingRef.current) {
+        justFinishedGenerationRef.current = false;
       }
 
       // Skip compilation while streaming - will compile when streaming ends
@@ -173,18 +245,50 @@ function GeneratePageContent() {
     projectStorage.init().catch(console.error);
   }, []);
 
+      className={`relative rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium transition-all ${
+        agentStatus === "fixing" 
+          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
+          : agentStatus === "monitoring"
+          ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+          : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+      }`}
+    >
+      {agentStatus === "fixing" ? (
+        <>
+          <RefreshCw className="w-3 h-3 animate-spin" />
+          <span>Agent Fixing Error...</span>
+        </>
+      ) : agentStatus === "monitoring" ? (
+        <>
+          <Sparkles className="w-3 h-3" />
+          <span>Agent Monitoring</span>
+        </>
+      ) : (
+        <>
+          <CheckCircle2 className="w-3 h-3" />
+          <span>System Healthy</span>
+        </>
+      )}
+    </button>
+  );
+
   return (
     <PageLayout 
       showLogoAsLink
       rightContent={
-        <Button
-          onClick={() => setProjectsPanelOpen(true)}
-          variant="outline"
-          size="sm"
-        >
-          <FolderOpen className="w-4 h-4 mr-2" />
-          Projects
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Agent Status Indicator */}
+          {AgentStatusIndicator}
+
+          <Button
+            onClick={() => setProjectsPanelOpen(true)}
+            variant="outline"
+            size="sm"
+          >
+            <FolderOpen className="w-4 h-4 mr-2" />
+            Projects
+          </Button>
+        </div>
       }
     >
       <div className="flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8">
