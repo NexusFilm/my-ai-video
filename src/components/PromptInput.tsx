@@ -440,11 +440,45 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     // Expose triggerGeneration via ref
     useImperativeHandle(ref, () => ({
       triggerGeneration: () => runGeneration(),
-      triggerFix: (code: string, error: string) => {
-        const fixPrompt = `Fix the following Remotion code which produced this error:\n\nError: ${error}\n\nCode:\n${code}\n\nPlease fix the error while maintaining the original functionality.`;
-        // We pass the code as a second argument to runGeneration, which will cause it to use the /api/refine endpoint
-        // effectively treating this as a refinement/fix operation
-        runGeneration(fixPrompt, code);
+      triggerFix: async (code: string, error: string) => {
+        // Use quick-fix endpoint for targeted fixes (faster, cheaper)
+        try {
+          onStreamingChange?.(true);
+          onStreamPhaseChange?.("reasoning");
+          
+          const response = await fetch("/api/quick-fix", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, error }),
+          });
+          
+          if (!response.ok) {
+            throw new Error("Quick fix failed");
+          }
+          
+          const result = await response.json();
+          
+          if (result.fixedCode && result.linesChanged?.length > 0) {
+            // Success - apply the targeted fix
+            onCodeGenerated?.(result.fixedCode);
+            console.log(`Auto-fix applied: ${result.explanation} (lines ${result.linesChanged.join(", ")})`);
+          } else {
+            // No quick fix available, fall back to full regeneration
+            console.log("Quick fix unavailable, falling back to full refine...");
+            const fixPrompt = `Fix this specific error in the code:\n\nError: ${error}\n\nDo NOT rewrite the entire code. Only fix the specific lines causing the error.`;
+            runGeneration(fixPrompt, code);
+            return; // runGeneration handles streaming state
+          }
+        } catch (err) {
+          console.error("Quick fix error:", err);
+          // Fall back to full regeneration on error
+          const fixPrompt = `Fix the following Remotion code which produced this error:\n\nError: ${error}\n\nCode:\n${code}\n\nPlease fix the error while maintaining the original functionality.`;
+          runGeneration(fixPrompt, code);
+          return;
+        } finally {
+          onStreamingChange?.(false);
+          onStreamPhaseChange?.("idle");
+        }
       }
     }));
 
