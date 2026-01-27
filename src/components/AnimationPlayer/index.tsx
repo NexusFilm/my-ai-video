@@ -102,6 +102,7 @@ export const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
             fps={fps}
             compositionHeight={height}
             compositionWidth={width}
+            acknowledgeRemotionLicense
             style={{
               width: "100%",
               height: "100%",

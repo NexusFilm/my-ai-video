@@ -200,7 +200,10 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         
         // Attempt to resize image using Canvas to avoid 413 Payload Too Large errors
         try {
-          if (!blob.type.startsWith('image/')) throw new Error("Not an image");
+          if (!blob.type.startsWith('image/')) {
+            console.warn(`urlToDataUrl: Skipping non-image URL (${blob.type || "unknown"})`);
+            return null;
+          }
           
           const bitmap = await createImageBitmap(blob);
           const MAX_SIZE = 1024; // Resize to max 1024px to keep prompt size manageable
@@ -336,9 +339,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
               return { name: asset.name, dataUrl, source: "converted" };
             }
 
-            console.warn(`Failed to convert asset ${asset.name}, using original URL as fallback`);
-            // Last resort: pass through the URL (may be ignored by the model if not resolvable)
-            return { name: asset.name, dataUrl: asset.url, source: "fallback" };
+            // If we reach here, the asset is unusable – stop generation with a clear error
+            const reason = asset.url?.startsWith("http")
+              ? "Provide a direct image URL (ending with .png/.jpg) instead of a page link."
+              : "Re-upload the image and try again.";
+            throw new Error(`Could not process asset "${asset.name}". ${reason}`);
           })
         );
         
