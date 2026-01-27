@@ -136,6 +136,26 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const audioChunksRef = useRef<Blob[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
 
+    // Estimate total code length based on prompt complexity
+    const estimateCodeLength = (promptText: string): number => {
+      const words = promptText.split(/\s+/).length;
+      const hasDataViz = /chart|graph|data|visualiz|plot|bar|line|pie/i.test(promptText);
+      const hasPhysics = /bounc|fall|grav|physic|collid|velocity/i.test(promptText);
+      const hasMultipleElements = /and|with|then|also|multiple|several/gi.test(promptText) && (promptText.match(/and|with|then|also|multiple|several/gi)?.length ?? 0) > 2;
+      
+      // Base estimate: 150 lines for simple animations
+      let estimate = 150;
+      
+      // Add lines based on complexity factors
+      if (words > 20) estimate += 50; // Detailed prompts need more code
+      if (hasDataViz) estimate += 80; // Data visualizations are longer
+      if (hasPhysics) estimate += 60; // Physics simulations need calculations
+      if (hasMultipleElements) estimate += 40; // Multiple elements = more code
+      
+      // Cap at 350 lines (very complex animations)
+      return Math.min(350, estimate);
+    };
+
     // Support both controlled and uncontrolled modes
     const prompt =
       controlledPrompt !== undefined ? controlledPrompt : uncontrolledPrompt;
