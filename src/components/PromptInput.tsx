@@ -110,6 +110,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       onCodeGenerated,
       onStreamingChange,
       onStreamPhaseChange,
+      onProgressChange,
       onError,
       variant = "editor",
       prompt: controlledPrompt,
