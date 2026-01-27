@@ -245,18 +245,30 @@ function GeneratePageContent() {
     projectStorage.init().catch(console.error);
   }, []);
 
+  // Agent Status Indicator component
+  const AgentStatusIndicator = (
+    <button
+      onClick={() => setAutoHealEnabled(!autoHealEnabled)}
       className={`relative rounded-full px-3 py-1 flex items-center gap-2 text-xs font-medium transition-all ${
-        agentStatus === "fixing" 
+        !autoHealEnabled
+          ? "bg-gray-500/10 text-gray-500 border border-gray-500/20"
+          : agentStatus === "fixing" 
           ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
           : agentStatus === "monitoring"
           ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
           : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
       }`}
+      title={autoHealEnabled ? "Click to disable auto-heal" : "Click to enable auto-heal"}
     >
-      {agentStatus === "fixing" ? (
+      {!autoHealEnabled ? (
+        <>
+          <AlertCircle className="w-3 h-3" />
+          <span>Agent Off</span>
+        </>
+      ) : agentStatus === "fixing" ? (
         <>
           <RefreshCw className="w-3 h-3 animate-spin" />
-          <span>Agent Fixing Error...</span>
+          <span>Agent Fixing...</span>
         </>
       ) : agentStatus === "monitoring" ? (
         <>
