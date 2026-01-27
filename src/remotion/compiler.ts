@@ -29,24 +29,17 @@ export interface CompilationResult {
   error: string | null;
 }
 
-// Strip imports and extract component body from LLM-generated code
-// Safety layer in case LLM includes full ES6 syntax despite instructions
-function extractComponentBody(code: string): string {
-  // Strip import statements
-  const cleaned = code.replace(/^import\s+.*$/gm, "").trim();
+// Parse and prepare code for compilation
+function prepareCode(code: string): string {
+  // 1. Strip import statements (we inject dependencies)
+  let cleaned = code.replace(/^import\s+.*$/gm, "");
 
-  // Extract body from "export const MyAnimation = () => { ... };"
-  const match = cleaned.match(
-    /^([\s\S]*?)export\s+const\s+\w+\s*=\s*\(\s*\)\s*=>\s*\{([\s\S]*)\};?\s*$/,
-  );
+  // 2. Remove "export" keywords to make declarations local to the function scope
+  cleaned = cleaned.replace(/^export\s+const/gm, "const");
+  cleaned = cleaned.replace(/^export\s+default\s+/gm, "");
+  cleaned = cleaned.replace(/^export\s+function/gm, "function");
 
-  if (match) {
-    const helpers = match[1].trim();
-    const body = match[2].trim();
-    return helpers ? `${helpers}\n\n${body}` : body;
-  }
-
-  return cleaned;
+  return cleaned.trim();
 }
 
 // Standalone compile function for use outside React components
@@ -56,12 +49,13 @@ export function compileCode(code: string): CompilationResult {
   }
 
   try {
-    const componentBody = extractComponentBody(code);
-    const wrappedSource = `const DynamicAnimation = () => {\n${componentBody}\n};`;
-
-    const transpiled = Babel.transform(wrappedSource, {
+    const preparedCode = prepareCode(code);
+    
+    // Transform JSX/TS to JS
+    const transpiled = Babel.transform(preparedCode, {
       presets: ["react", "typescript"],
       filename: "dynamic-animation.tsx",
+      retainLines: true,
     });
 
     if (!transpiled.code) {
@@ -77,7 +71,26 @@ export function compileCode(code: string): CompilationResult {
       Sequence,
     };
 
-    const wrappedCode = `${transpiled.code}\nreturn DynamicAnimation;`;
+    // We assume the component is named 'MyAnimation' based on system prompt
+    // But we also look for other common patterns if that fails
+    let finalCode = transpiled.code;
+    
+    // Ensure we return the component
+    if (!finalCode.includes("return MyAnimation")) {
+      if (finalCode.includes("const MyAnimation")) {
+        finalCode += "\nreturn MyAnimation;";
+      } else if (finalCode.includes("function MyAnimation")) {
+        finalCode += "\nreturn MyAnimation;";
+      } else {
+        // Fallback: try to find the last defined function or const
+        const match = finalCode.match(/(?:const|function)\s+(\w+)/g);
+        if (match && match.length > 0) {
+          const lastMatch = match[match.length - 1];
+          const name = lastMatch.split(/\s+/)[1];
+          finalCode += `\nreturn ${name};`;
+        }
+      }
+    }
 
     const createComponent = new Function(
       "React",
