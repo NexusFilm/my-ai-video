@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     // Convert to base64 for client-side storage
     const bytes = await file.arrayBuffer();
     const buffer = new Uint8Array(bytes);
-    const binary = String.fromCharCode(...buffer);
+    const binary = String.fromCharCode.apply(null, Array.from(buffer) as any);
     const base64 = btoa(binary);
     const dataUrl = `data:${file.type};base64,${base64}`;
 
