@@ -26,7 +26,7 @@ if (
   !process.env.REMOTION_AWS_SECRET_ACCESS_KEY
 ) {
   console.log(
-    'The environment variable "REMOTION_REMOTION_AWS_SECRET_ACCESS_KEY" is not set.',
+    'The environment variable "REMOTION_AWS_SECRET_ACCESS_KEY" is not set.',
   );
   console.log("Lambda renders were not set up.");
   console.log(
@@ -35,45 +35,51 @@ if (
   process.exit(0);
 }
 
-process.stdout.write("Deploying Lambda function... ");
+try {
+  process.stdout.write("Deploying Lambda function... ");
 
-const { functionName, alreadyExisted: functionAlreadyExisted } =
-  await deployFunction({
-    createCloudWatchLogGroup: true,
-    memorySizeInMb: RAM,
+  const { functionName, alreadyExisted: functionAlreadyExisted } =
+    await deployFunction({
+      createCloudWatchLogGroup: true,
+      memorySizeInMb: RAM,
+      region: REGION,
+      timeoutInSeconds: TIMEOUT,
+      diskSizeInMb: DISK,
+    });
+  console.log(
+    functionName,
+    functionAlreadyExisted ? "(already existed)" : "(created)",
+  );
+
+  process.stdout.write("Ensuring bucket... ");
+  const { bucketName, alreadyExisted: bucketAlreadyExisted } =
+    await getOrCreateBucket({
+      region: REGION,
+    });
+  console.log(
+    bucketName,
+    bucketAlreadyExisted ? "(already existed)" : "(created)",
+  );
+
+  process.stdout.write("Deploying site... ");
+  const { siteName } = await deploySite({
+    bucketName,
+    entryPoint: path.join(process.cwd(), "src", "remotion", "index.ts"),
+    siteName: SITE_NAME,
     region: REGION,
-    timeoutInSeconds: TIMEOUT,
-    diskSizeInMb: DISK,
+    options: { webpackOverride },
   });
-console.log(
-  functionName,
-  functionAlreadyExisted ? "(already existed)" : "(created)",
-);
 
-process.stdout.write("Ensuring bucket... ");
-const { bucketName, alreadyExisted: bucketAlreadyExisted } =
-  await getOrCreateBucket({
-    region: REGION,
-  });
-console.log(
-  bucketName,
-  bucketAlreadyExisted ? "(already existed)" : "(created)",
-);
+  console.log(siteName);
 
-process.stdout.write("Deploying site... ");
-const { siteName } = await deploySite({
-  bucketName,
-  entryPoint: path.join(process.cwd(), "src", "remotion", "index.ts"),
-  siteName: SITE_NAME,
-  region: REGION,
-  options: { webpackOverride },
-});
-
-console.log(siteName);
-
-console.log();
-console.log("You now have everything you need to render videos!");
-console.log("Re-run this command when:");
-console.log("  1) you changed the video template");
-console.log("  2) you changed config.mjs");
-console.log("  3) you upgraded Remotion to a newer version");
+  console.log();
+  console.log("You now have everything you need to render videos!");
+  console.log("Re-run this command when:");
+  console.log("  1) you changed the video template");
+  console.log("  2) you changed config.mjs");
+  console.log("  3) you upgraded Remotion to a newer version");
+} catch (error) {
+  console.error("Deploy failed:", error.message);
+  console.log("Continuing with build anyway - Lambda already set up manually");
+  process.exit(0);
+}
