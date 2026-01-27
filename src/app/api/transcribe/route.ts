@@ -1,9 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OpenAI } from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,12 +12,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const transcription = await openai.audio.transcriptions.create({
-      file: audio,
-      model: "whisper-1",
+    // Use OpenAI API directly
+    const openaiFormData = new FormData();
+    openaiFormData.append("file", audio);
+    openaiFormData.append("model", "whisper-1");
+
+    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: openaiFormData,
     });
 
-    return NextResponse.json({ text: transcription.text });
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json({ text: data.text });
   } catch (error) {
     console.error("Transcription error:", error);
     return NextResponse.json(
