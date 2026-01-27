@@ -9,6 +9,7 @@ import {
 } from "@/skills";
 import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
 import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -152,6 +153,18 @@ NEVER use these as variable names - they shadow imports:
 
 export async function POST(req: Request) {
   const { prompt, model = "gpt-5-mini" } = await req.json();
+
+  // Rate limit check
+  const clientId = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
+  const rateLimit = checkRateLimit(`generate:${clientId}`);
+  
+  if (!rateLimit.allowed) {
+    console.log(`Rate limit hit for generate: ${rateLimit.reason}`);
+    return new Response(
+      JSON.stringify({ error: rateLimit.reason || "Rate limit exceeded", rateLimited: true }),
+      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+    );
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
 

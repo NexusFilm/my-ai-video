@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, forwardRef, useImperativeHandle, useRef } from "react";
+import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowUp,
@@ -505,6 +505,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           if (isCancelledRef.current) {
             console.log("Fix aborted - user cancelled");
             return;
+          }
+          
+          // Handle rate limiting - stop auto-heal, don't fall back
+          if (response.status === 429) {
+            const errorData = await response.json();
+            console.log("Rate limit hit, stopping auto-heal:", errorData.error);
+            onError?.(`Rate limited: ${errorData.error}. Please wait before trying again.`, "api");
+            return; // Don't fall back to full regeneration when rate limited
           }
           
           if (!response.ok) {

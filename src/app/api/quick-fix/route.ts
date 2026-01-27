@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 interface FixResponse {
   fixedCode: string;
@@ -8,6 +9,18 @@ interface FixResponse {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit check - use IP or a session identifier
+    const clientId = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "anonymous";
+    const rateLimit = checkRateLimit(`quick-fix:${clientId}`);
+    
+    if (!rateLimit.allowed) {
+      console.log(`Rate limit hit for quick-fix: ${rateLimit.reason}`);
+      return Response.json(
+        { error: rateLimit.reason || "Rate limit exceeded", rateLimited: true },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+      );
+    }
+    
     const { code, error } = await request.json();
 
     if (!code || !error) {
@@ -68,13 +81,13 @@ ${errorLine ? `ERROR LINE: ${errorLine}` : ''}
 
 FULL CODE:
 \`\`\`tsx
-${codeLines.map((line, i) => `${i + 1}: ${line}`).join('\n')}
+${codeLines.map((line: string, i: number) => `${i + 1}: ${line}`).join('\n')}
 \`\`\`
 
 ${errorLine ? `
 CONTEXT AROUND ERROR (lines ${contextStart + 1}-${contextEnd}):
 \`\`\`tsx
-${codeLines.slice(contextStart, contextEnd).map((line, i) => `${contextStart + i + 1}: ${line}`).join('\n')}
+${codeLines.slice(contextStart, contextEnd).map((line: string, i: number) => `${contextStart + i + 1}: ${line}`).join('\n')}
 \`\`\`
 ` : ''}
 

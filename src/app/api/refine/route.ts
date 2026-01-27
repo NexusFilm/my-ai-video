@@ -1,7 +1,20 @@
 import { NextRequest } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit check
+    const clientId = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "anonymous";
+    const rateLimit = checkRateLimit(`refine:${clientId}`);
+    
+    if (!rateLimit.allowed) {
+      console.log(`Rate limit hit for refine: ${rateLimit.reason}`);
+      return Response.json(
+        { error: rateLimit.reason || "Rate limit exceeded", rateLimited: true },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+      );
+    }
+    
     const { currentCode, refinementPrompt, previousPrompts } = await request.json();
 
     if (!currentCode || !refinementPrompt) {
