@@ -283,17 +283,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       - Prefer lightweight animations; avoid heavy DOM or unnecessary reflows`;
         let promptParts: string[] = [];
         
-        // Add assets with high priority upfront
+        // Add assets with high priority upfront (WITHOUT embedding the actual data URLs in prompt)
         if (assetData.length > 0) {
-          const assetList = assetData
-            .map((a, i) => `${i + 1}. "${a.name}" → ${a.url}`)
+          const assetNames = assetData
+            .map((a, i) => `${i + 1}. "${a.name}"`)
             .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL - IMAGE SYNTAX RULES:**
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetNames}\n\n**CRITICAL - IMAGE INTEGRATION:**
+- A constant ASSET_URLS object will be available at the top of the code
+- ASSET_URLS['${assetData.map(a => a.name).join("', '")}'] contains the image data
 - Use ONLY standard HTML <img> tags (lowercase)
-- NEVER use <Img>, <Image>, or any component names for images
-- MUST use <img src="URL" /> syntax with provided URLs
-- Example: <img src="data:image/jpeg;base64,..." style={{width: "200px", borderRadius: "50%"}} />
+- Example: <img src={ASSET_URLS['${assetData[0]?.name || 'image'}']} style={{width: "200px"}} />
 - Position and animate images prominently in your design
 - Do not ignore or mark as "undefined"
 - Ensure images are visible and integrated into the animation`
@@ -452,6 +452,24 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         finalCode = finalCode.replace(/^```(?:tsx?|jsx?)?\n?/, "");
         finalCode = finalCode.replace(/\n?```\s*$/, "");
         finalCode = extractComponentCode(finalCode);
+
+        // Inject asset data URLs as a constant if assets were used
+        if (assetData.length > 0) {
+          const assetUrlsObject = assetData
+            .map(a => `  '${a.name}': '${a.url}'`)
+            .join(",\n");
+          const assetConstant = `\nconst ASSET_URLS = {\n${assetUrlsObject}\n};\n`;
+          
+          // Insert after imports, before export
+          const exportIndex = finalCode.indexOf('export ');
+          if (exportIndex !== -1) {
+            finalCode = finalCode.slice(0, exportIndex) + assetConstant + finalCode.slice(exportIndex);
+          } else {
+            // If no export found, prepend to the code
+            finalCode = assetConstant + finalCode;
+          }
+          console.log(`✓ Injected ASSET_URLS constant with ${assetData.length} image(s)`);
+        }
 
         // Update the editor with the cleaned code
         onCodeGenerated?.(finalCode);
