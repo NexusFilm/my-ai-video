@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Upload, X, Image as ImageIcon, Eye, Link2, AlertCircle } from "lucide-react";
+import { useState, useCallback, useRef } from "react";
+import {
+  Upload,
+  X,
+  Image as ImageIcon,
+  Eye,
+  Link2,
+  AlertCircle,
+} from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { Button } from "@/components/ui/button";
 
@@ -14,7 +21,7 @@ export interface UploadedImage {
   description?: string;
   uploadStatus?: "idle" | "uploading" | "success" | "error";
   uploadError?: string;
-  publicUrl?: string; // The URL returned from the server
+  publicUrl?: string;
 }
 
 interface ImageUploaderProps {
@@ -31,114 +38,134 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState("");
 
+  // Use ref to track current images for async operations
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+
+  // Upload file to server (Supabase)
+  const uploadFileToServer = async (image: UploadedImage) => {
+    if (!image.file) return;
+
+    console.log(`🚀 Starting upload for: ${image.name}`);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", image.file, image.name);
+
+      const response = await fetch("/api/upload-asset", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Upload failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ Upload complete for ${image.name}:`, data.url);
+
+      // Update image with success status
+      onImagesChange(
+        imagesRef.current.map((img) =>
+          img.id === image.id
+            ? { ...img, uploadStatus: "success" as const, publicUrl: data.url }
+            : img,
+        ),
+      );
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Upload failed";
+      console.error(`❌ Upload failed for ${image.name}:`, errorMessage);
+
+      onImagesChange(
+        imagesRef.current.map((img) =>
+          img.id === image.id
+            ? {
+                ...img,
+                uploadStatus: "error" as const,
+                uploadError: errorMessage,
+              }
+            : img,
+        ),
+      );
+    }
+  };
+
+  // Process and upload files
+  const processFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    // Compress files
+    const compressedFiles = await Promise.all(
+      files.map(async (file) => {
+        try {
+          console.log(
+            `📦 Compressing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`,
+          );
+          const compressed = await imageCompression(file, {
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true,
+          });
+          console.log(
+            `✓ Compressed to ${(compressed.size / 1024 / 1024).toFixed(2)}MB`,
+          );
+          return compressed;
+        } catch (error) {
+          console.error(`Failed to compress ${file.name}:`, error);
+          return file;
+        }
+      }),
+    );
+
+    // Create image objects
+    const newImages: UploadedImage[] = compressedFiles.map((file) => ({
+      id: Math.random().toString(36).substring(7),
+      url: URL.createObjectURL(file),
+      file,
+      type: "asset" as const,
+      name: file.name,
+      uploadStatus: "uploading" as const,
+    }));
+
+    // Add to state
+    const allImages = [...images, ...newImages];
+    onImagesChange(allImages);
+
+    // Upload each file
+    for (const image of newImages) {
+      await uploadFileToServer(image);
+    }
+  };
+
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
 
       const files = Array.from(e.dataTransfer.files).filter((file) =>
-        file.type.startsWith("image/")
+        file.type.startsWith("image/"),
       );
 
-      const newImages: UploadedImage[] = files.map((file) => ({
-        id: Math.random().toString(36).substring(7),
-        url: URL.createObjectURL(file),
-        file,
-        type: "asset", // Default to asset
-        name: file.name,
-      }));
-
-      onImagesChange([...images, ...newImages]);
+      await processFiles(files);
     },
-    [images, onImagesChange]
+    [images, onImagesChange],
   );
 
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []).filter((file) =>
-        file.type.startsWith("image/")
+        file.type.startsWith("image/"),
       );
 
-      // Compress files before creating image objects
-      const compressedFiles = await Promise.all(
-        files.map(async (file) => {
-          try {
-            console.log(`📦 Compressing image: ${file.name} (original: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-            const compressedFile = await imageCompression(file, {
-              maxSizeMB: 1,
-              maxWidthOrHeight: 1920,
-              useWebWorker: true,
-            });
-            const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
-            const originalSize = (file.size / 1024 / 1024).toFixed(2);
-            console.log(`✓ Compressed: ${originalSize}MB → ${compressedSize}MB`);
-            return compressedFile;
-          } catch (error) {
-            console.error(`Failed to compress ${file.name}:`, error);
-            return file; // Fall back to original
-          }
-        })
-      );
+      await processFiles(files);
 
-      const newImages: UploadedImage[] = compressedFiles.map((file) => ({
-        id: Math.random().toString(36).substring(7),
-        url: URL.createObjectURL(file),
-        file,
-        type: "asset",
-        name: file.name,
-        uploadStatus: "uploading",
-      }));
-
-      const allImages = [...images, ...newImages];
-      onImagesChange(allImages);
-
-      // Upload each compressed file to server
-      newImages.forEach((image) => {
-        uploadFileToServer(image, allImages);
-      });
+      // Reset input so same file can be selected again
+      e.target.value = "";
     },
-    [images, onImagesChange]
+    [images, onImagesChange],
   );
 
-  const uploadFileToServer = useCallback(
-    async (image: UploadedImage, allImages: UploadedImage[]) => {
-      if (!image.file) return;
-
-      try {
-        const formData = new FormData();
-        formData.append("file", image.file, image.name);
-        
-        const response = await fetch("/api/upload-asset", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const publicUrl = data.url; // Now returns /api/assets/[id]
-
-        // Update with success status and HTTP URL
-        const successImages = allImages.map((img) =>
-          img.id === image.id
-            ? { ...img, uploadStatus: "success" as const, publicUrl }
-            : img
-        );
-        onImagesChange(successImages);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Upload failed";
-        const errorImages = allImages.map((img) =>
-          img.id === image.id
-            ? { ...img, uploadStatus: "error" as const, uploadError: errorMessage }
-            : img
-        );
-        onImagesChange(errorImages);
-      }
-    },
-    [onImagesChange]
-  );
   const handleUrlSubmit = useCallback(() => {
     setUrlError("");
     const raw = urlValue.trim();
@@ -149,23 +176,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     try {
       const parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
       const href = parsed.toString();
-      const looksLikeImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(parsed.pathname);
+      const looksLikeImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(
+        parsed.pathname,
+      );
       if (!looksLikeImage) {
-        setUrlError("Use a direct image link ending in .png, .jpg, .gif, .webp, or .svg.");
+        setUrlError(
+          "Use a direct image link ending in .png, .jpg, .gif, .webp, or .svg.",
+        );
         return;
       }
 
       const newImage: UploadedImage = {
         id: Math.random().toString(36).substring(7),
         url: href,
+        publicUrl: href, // External URLs are already public
         type: "asset",
         name: parsed.pathname.split("/").pop() || "Image",
+        uploadStatus: "success",
       };
 
       onImagesChange([...images, newImage]);
       setIsUrlModalOpen(false);
       setUrlValue("");
-    } catch (err) {
+    } catch {
       setUrlError("That URL is not valid.");
     }
   }, [images, onImagesChange, urlValue]);
@@ -176,11 +209,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         images.map((img) =>
           img.id === id
             ? { ...img, type: img.type === "asset" ? "reference" : "asset" }
-            : img
-        )
+            : img,
+        ),
       );
     },
-    [images, onImagesChange]
+    [images, onImagesChange],
   );
 
   const removeImage = useCallback(
@@ -191,21 +224,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       }
       onImagesChange(images.filter((img) => img.id !== id));
     },
-    [images, onImagesChange]
+    [images, onImagesChange],
   );
 
   const updateDescription = useCallback(
     (id: string, description: string) => {
       onImagesChange(
-        images.map((img) => (img.id === id ? { ...img, description } : img))
+        images.map((img) => (img.id === id ? { ...img, description } : img)),
       );
     },
-    [images, onImagesChange]
+    [images, onImagesChange],
   );
 
   return (
     <div className="space-y-3">
-      {/* Upload Area - Compact */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -257,12 +289,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         />
       </div>
 
-      {/* Uploaded Images */}
       {images.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            Click image type to toggle between Reference (inspiration) and Asset
-            (use in video)
+            Click to toggle: Reference (style inspiration) or Asset (use in
+            video)
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {images.map((image) => (
@@ -275,14 +306,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                   alt={image.name}
                   className="w-full h-24 object-cover"
                 />
-                
-                {/* Upload Status Overlay */}
+
                 {image.uploadStatus && image.uploadStatus !== "idle" && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                     {image.uploadStatus === "uploading" && (
                       <div className="text-center">
                         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
-                        <p className="text-xs text-white font-medium">Uploading...</p>
+                        <p className="text-xs text-white font-medium">
+                          Uploading...
+                        </p>
                       </div>
                     )}
                     {image.uploadStatus === "success" && (
@@ -294,7 +326,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                     {image.uploadStatus === "error" && (
                       <div className="text-center px-2">
                         <div className="text-2xl text-red-500 mb-1">⚠</div>
-                        <p className="text-xs text-white font-medium">{image.uploadError || "Error"}</p>
+                        <p className="text-xs text-white font-medium">
+                          {image.uploadError || "Error"}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -305,7 +339,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                     <Button
                       type="button"
                       size="sm"
-                      variant={image.type === "reference" ? "default" : "outline"}
+                      variant={
+                        image.type === "reference" ? "default" : "outline"
+                      }
                       onClick={() => toggleType(image.id)}
                       className="flex-1 text-xs"
                       disabled={image.uploadStatus === "uploading"}
@@ -336,7 +372,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                   {image.type === "reference" && (
                     <input
                       type="text"
-                      placeholder="What should I notice? (optional)"
+                      placeholder="What should I notice?"
                       value={image.description || ""}
                       onChange={(e) =>
                         updateDescription(image.id, e.target.value)
@@ -344,16 +380,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                       className="w-full px-2 py-1 text-xs rounded border border-border bg-input text-foreground focus:outline-none focus:border-primary"
                     />
                   )}
-                  <div className="flex items-center justify-between gap-1">
-                    <p className="text-xs text-muted-foreground truncate flex-1">
-                      {image.name}
-                    </p>
-                    {image.uploadStatus === "success" && image.publicUrl && (
-                      <span className="text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-1 rounded whitespace-nowrap">
-                        Ready
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {image.name}
+                  </p>
                 </div>
               </div>
             ))}
@@ -369,8 +398,12 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 <Link2 className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">Add image by URL</h3>
-                <p className="text-xs text-muted-foreground mt-1">Paste a direct image link (must end with .png, .jpg, .gif, .webp, or .svg).</p>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Add image by URL
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Paste a direct image link (.png, .jpg, .gif, .webp, .svg)
+                </p>
               </div>
             </div>
 
