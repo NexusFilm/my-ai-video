@@ -274,7 +274,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Assets and references come FIRST for higher priority in AI reasoning
         const appRules = `## APP RULES (always apply)
       - Use Remotion/React: generate a single component, keep imports intact
-      - Use provided assets (data URLs) visibly in the animation; do not ignore them
+      - For images: use standard HTML <img> tags (lowercase), NEVER <Img> or Image components
+      - Use provided assets (URLs) visibly in the animation with <img src="..."> syntax
       - Keep structure stable; make minimal edits when refining/fixing
       - Respect timing, easing, and positions requested by the user
       - Prefer lightweight animations; avoid heavy DOM or unnecessary reflows`;
@@ -286,7 +287,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             .map((a, i) => `${i + 1}. "${a.name}" → ${a.url}`)
             .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- Use the URLs provided above directly in <img src=\"...\" /> tags\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: <img src="https://..." style={{borderRadius: "50%", width: "200px"}} />`
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL - IMAGE SYNTAX RULES:**
+- Use ONLY standard HTML <img> tags (lowercase)
+- NEVER use <Img>, <Image>, or any component names for images
+- MUST use <img src="URL" /> syntax with provided URLs
+- Example: <img src="blob:https://..." style={{width: "200px", borderRadius: "50%"}} />
+- Position and animate images prominently in your design
+- Do not ignore or mark as "undefined"
+- Ensure images are visible and integrated into the animation`
           );
         }
 
