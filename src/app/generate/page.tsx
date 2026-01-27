@@ -26,12 +26,37 @@ function GeneratePageContent() {
   // so syntax highlighting is disabled from the beginning
   const willAutoStart = Boolean(initialPrompt);
 
+  // Get settings from URL params
+  const urlAspectRatio = searchParams.get("aspectRatio") as "16:9" | "9:16" | null;
+  const urlMotionBlur = searchParams.get("motionBlur");
+  const urlPresets = searchParams.get("presets");
+  
+  // Get images from sessionStorage
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>(() => {
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("uploadedImages");
+      if (stored) {
+        sessionStorage.removeItem("uploadedImages"); // Clear after reading
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
+
   const [durationInFrames, setDurationInFrames] = useState(
     examples[0]?.durationInFrames || 150,
   );
   const [fps, setFps] = useState(examples[0]?.fps || 30);
-  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">("16:9");
-  const [motionBlur, setMotionBlur] = useState(0); // 0 = off, 1-10 = intensity
+  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">(
+    urlAspectRatio || "16:9"
+  );
+  const [motionBlur, setMotionBlur] = useState(
+    urlMotionBlur ? parseInt(urlMotionBlur, 10) : 0
+  );
   const [isStreaming, setIsStreaming] = useState(willAutoStart);
   const [streamPhase, setStreamPhase] = useState<StreamPhase>(
     willAutoStart ? "reasoning" : "idle",
@@ -44,8 +69,9 @@ function GeneratePageContent() {
     type: GenerationErrorType;
   } | null>(null);
   const [isRefineMode, setIsRefineMode] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
-  const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
+  const [selectedPresets, setSelectedPresets] = useState<string[]>(
+    urlPresets ? urlPresets.split(",") : []
+  );
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
