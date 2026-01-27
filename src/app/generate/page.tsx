@@ -100,7 +100,6 @@ function GeneratePageContent() {
     linesChanged: number[];
   } | null>(null);
   const [isAnalyzingError, setIsAnalyzingError] = useState(false);
-  const [isRateLimited, setIsRateLimited] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<{
     currentUsage: number;
     dailyLimit: number;
@@ -187,12 +186,10 @@ function GeneratePageContent() {
 
         if (response.status === 429) {
           const errorData = await response.json();
-          setIsRateLimited(true);
           setGenerationError({
             message: `Rate limited: ${errorData.error}`,
             type: "api",
           });
-          setTimeout(() => setIsRateLimited(false), 10000);
           return;
         }
 
@@ -288,14 +285,12 @@ function GeneratePageContent() {
     // Clear errors and reset state when starting a new generation
     if (streaming) {
       setGenerationError(null);
-      setIsRateLimited(false);
       setSuggestedFix(null);
     }
   }, []);
 
   // Handle user clicking cancel button
   const handleCancel = useCallback(() => {
-    setIsRateLimited(false);
     setSuggestedFix(null);
     justFinishedGenerationRef.current = false;
     promptInputRef.current?.cancelAll();
@@ -304,15 +299,6 @@ function GeneratePageContent() {
   const handleError = useCallback(
     (message: string, type: GenerationErrorType) => {
       setGenerationError({ message, type });
-
-      // If this is a rate limit error, disable auto-heal
-      if (message.includes("Rate limit") || message.includes("rate limit")) {
-        setIsRateLimited(true);
-        // Auto-clear rate limit flag after 10 seconds so user can try again
-        setTimeout(() => {
-          setIsRateLimited(false);
-        }, 10000);
-      }
     },
     [],
   );
