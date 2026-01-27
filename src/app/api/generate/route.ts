@@ -155,6 +155,14 @@ NEVER use these as variable names - they shadow imports:
 export async function POST(req: Request) {
   const { prompt, model = "gpt-5-mini" } = await req.json();
 
+  // Emergency kill switch to stop all outbound AI calls
+  if (process.env.API_DISABLED === "true") {
+    return new Response(
+      JSON.stringify({ error: "API temporarily disabled", rateLimited: true }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   // Rate limit check
   const clientId = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
   const rateLimit = checkRateLimit(`generate:${clientId}`);

@@ -4,6 +4,14 @@ import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 
 export async function POST(request: NextRequest) {
   try {
+    // Emergency kill switch to stop all outbound AI calls
+    if (process.env.API_DISABLED === "true") {
+      return Response.json(
+        { error: "API temporarily disabled", rateLimited: true },
+        { status: 503 }
+      );
+    }
+
     // Rate limit check
     const clientId = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "anonymous";
     const rateLimit = checkRateLimit(`refine:${clientId}`);

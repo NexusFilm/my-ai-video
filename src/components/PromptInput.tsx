@@ -181,6 +181,22 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       return JSON.parse(localStorage.getItem("promptHistory") || "[]");
     };
 
+    const urlToDataUrl = async (url: string): Promise<string | null> => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+          reader.onerror = () => reject(new Error("Failed to read blob"));
+          reader.readAsDataURL(blob);
+        });
+      } catch (err) {
+        console.error("Failed to convert URL to data URL:", err);
+        return null;
+      }
+    };
+
     const runGeneration = async (overridePrompt?: string, overrideCode?: string) => {
       const activePrompt = overridePrompt || prompt;
       if (!activePrompt.trim() || isLoading) return;
@@ -231,6 +247,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Convert asset images to data URLs if needed
         const assetData = await Promise.all(
           assets.map(async (asset) => {
+            // If we have the original file, upload and convert to a data URL on the server
             if (asset.file) {
               const formData = new FormData();
               formData.append("file", asset.file);
@@ -243,9 +260,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                 return { name: asset.name, dataUrl: data.dataUrl };
               } catch (err) {
                 console.error("Failed to upload asset:", err);
-                return { name: asset.name, dataUrl: asset.url };
+                // Fall through to client-side conversion
               }
             }
+
+            // If we only have a URL (e.g., blob: or remote), convert it client-side to ensure the model sees a usable data URL
+            const dataUrl = await urlToDataUrl(asset.url);
+            if (dataUrl) {
+              return { name: asset.name, dataUrl };
+            }
+
+            // Last resort: pass through the URL (may be ignored by the model if not resolvable)
             return { name: asset.name, dataUrl: asset.url };
           })
         );
