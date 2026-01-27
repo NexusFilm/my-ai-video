@@ -54,88 +54,47 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   );
 
   const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []).filter((file) =>
         file.type.startsWith("image/")
       );
 
-      const newImages: UploadedImage[] = files.map((file) => ({
+      // Compress files before creating image objects
+      const compressedFiles = await Promise.all(
+        files.map(async (file) => {
+          try {
+            console.log(`📦 Compressing image: ${file.name} (original: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+            const compressedFile = await imageCompression(file, {
+              maxSizeMB: 1,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+            });
+            const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
+            const originalSize = (file.size / 1024 / 1024).toFixed(2);
+            console.log(`✓ Compressed: ${originalSize}MB → ${compressedSize}MB`);
+            return compressedFile;
+          } catch (error) {
+            console.error(`Failed to compress ${file.name}:`, error);
+            return file; // Fall back to original
+          }
+        })
+      );
+
+      const newImages: UploadedImage[] = compressedFiles.map((file) => ({
         id: Math.random().toString(36).substring(7),
         url: URL.createObjectURL(file),
         file,
         type: "asset",
         name: file.name,
-        uploadStatus: "idle",
+        uploadStatus: "success", // Blob URL is immediately available
+        publicUrl: URL.createObjectURL(file), // Use blob URL directly, no server upload needed
       }));
 
       const allImages = [...images, ...newImages];
       onImagesChange(allImages);
-
-      // Auto-upload each file to the server
-      newImages.forEach((image) => {
-        uploadFileToServer(image, allImages);
-      });
     },
     [images, onImagesChange]
   );
-
-  const uploadFileToServer = useCallback(
-    async (image: UploadedImage, allImages: UploadedImage[]) => {
-      if (!image.file) return;
-
-      // Update status to uploading
-      const updatedImages = allImages.map((img) =>
-        img.id === image.id ? { ...img, uploadStatus: "uploading" as const } : img
-      );
-      onImagesChange(updatedImages);
-
-      try {
-        // Compress the image before uploading
-        console.log(`📦 Compressing image: ${image.name} (original: ${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
-        const compressedFile = await imageCompression(image.file, {
-          maxSizeMB: 1, // Max 1MB
-          maxWidthOrHeight: 1920, // Max 1920px on longest side
-          useWebWorker: true,
-        });
-        
-        const originalSize = (image.file.size / 1024 / 1024).toFixed(2);
-        const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
-        console.log(`✓ Compressed: ${originalSize}MB → ${compressedSize}MB`);
-
-        const formData = new FormData();
-        formData.append("file", compressedFile, image.name);
-        const response = await fetch("/api/upload-asset", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const publicUrl = data.url || data.dataUrl;
-
-        // Update with success status and public URL
-        const successImages = updatedImages.map((img) =>
-          img.id === image.id
-            ? { ...img, uploadStatus: "success" as const, publicUrl }
-            : img
-        );
-        onImagesChange(successImages);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Upload failed";
-        const errorImages = updatedImages.map((img) =>
-          img.id === image.id
-            ? { ...img, uploadStatus: "error" as const, uploadError: errorMessage }
-            : img
-        );
-        onImagesChange(errorImages);
-      }
-    },
-    [onImagesChange]
-  );
-
   const handleUrlSubmit = useCallback(() => {
     setUrlError("");
     const raw = urlValue.trim();

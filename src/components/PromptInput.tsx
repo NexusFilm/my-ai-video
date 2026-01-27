@@ -246,48 +246,25 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           referenceContext = analyses.filter(Boolean).join("\n\n");
         }
         
-        // Process asset images - use URLs directly to avoid massive base64 bloat
+        // Process asset images - blob URLs are already available from browser compression
         const assetData = await Promise.all(
           assets.map(async (asset) => {
-            console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}, url type: ${asset.url.substring(0, 20)}`);
+            console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}`);
             
-            // If we already have a publicUrl from the auto-upload, use it
+            // Use the blob URL that was created when the image was compressed and loaded
             if (asset.publicUrl) {
-              console.log(`Using pre-uploaded URL for asset: ${asset.name}`);
-              return { name: asset.name, url: asset.publicUrl, source: "pre-uploaded" };
+              console.log(`✓ Using blob URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.publicUrl, source: "blob-url" };
             }
             
-            // For remote URLs, use them directly (avoids massive base64 bloat)
+            // For remote URLs, use them directly
             if (asset.url?.startsWith("http")) {
-              console.log(`Using remote URL for asset: ${asset.name}`);
+              console.log(`✓ Using remote URL for asset: ${asset.name}`);
               return { name: asset.name, url: asset.url, source: "remote" };
             }
             
-            // If we have the original file but no publicUrl, upload to server
-            if (asset.file) {
-              const formData = new FormData();
-              formData.append("file", asset.file);
-              try {
-                console.log(`Uploading asset file: ${asset.name}`);
-                const response = await fetch("/api/upload-asset", {
-                  method: "POST",
-                  body: formData,
-                });
-                if (!response.ok) {
-                  throw new Error(`Upload failed: ${response.status}`);
-                }
-                const data = await response.json();
-                const publicUrl = data.url || data.dataUrl;
-                console.log(`Asset uploaded successfully: ${asset.name}, URL: ${publicUrl.substring(0, 50)}...`);
-                return { name: asset.name, url: publicUrl, source: "upload" };
-              } catch (err) {
-                console.error(`Failed to upload asset ${asset.name}:`, err);
-                throw new Error(`Failed to upload asset "${asset.name}": ${err instanceof Error ? err.message : "Unknown error"}`);
-              }
-            }
-
-            // If we reach here, the asset is unusable – stop generation with a clear error
-            throw new Error(`Could not process asset "${asset.name}". Please re-upload or provide a direct image URL.`);
+            // Asset is not usable
+            throw new Error(`Could not process asset "${asset.name}". Please re-upload.`);
           })
         );
         
