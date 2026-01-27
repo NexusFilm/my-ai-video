@@ -8,6 +8,7 @@ import {
   type SkillName,
 } from "@/skills";
 import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
+import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -188,6 +189,16 @@ export async function POST(req: Request) {
   let enhancedSystemPrompt = skillContent
     ? `${SYSTEM_PROMPT}\n\n## SKILL-SPECIFIC GUIDANCE\n${skillContent}`
     : SYSTEM_PROMPT;
+  
+  // Analyze if AI video generation is needed
+  const aiVideoAnalysis = await analyzeAIVideoNeed(prompt);
+  console.log("AI Video Analysis:", aiVideoAnalysis);
+  
+  // Apply hybrid system if AI video is needed
+  if (aiVideoAnalysis.needed) {
+    enhancedSystemPrompt = getHybridSystemPrompt(enhancedSystemPrompt, true);
+    console.log("AI video will be used for:", aiVideoAnalysis.elements.map(e => e.description).join(", "));
+  }
   
   // Apply Nexus Flavor enhancements
   enhancedSystemPrompt = getEnhancedSystemPrompt(enhancedSystemPrompt);
