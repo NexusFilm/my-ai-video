@@ -22,43 +22,49 @@ export const StylePresetSelector: React.FC<StylePresetSelectorProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        Select style presets to enhance your prompt:
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground mb-1">
+        Select style presets to enhance your prompt
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {STYLE_PRESETS.map((preset) => {
           const isSelected = selectedPresets.includes(preset.id);
           return (
-            <Button
+            <button
               key={preset.id}
               type="button"
-              variant={isSelected ? "default" : "outline"}
-              size="sm"
               onClick={() => togglePreset(preset.id)}
-              className="flex flex-col items-start h-auto py-2 px-3 relative"
+              className={`flex flex-col items-start p-3 rounded-lg border-2 transition-all hover:scale-[1.02] relative ${
+                isSelected
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-background hover:border-muted-foreground/30"
+              }`}
             >
               {isSelected && (
-                <Check className="w-3 h-3 absolute top-1 right-1" />
+                <div className="absolute top-2 right-2 bg-primary rounded-full p-0.5">
+                  <Check className="w-3 h-3 text-primary-foreground" />
+                </div>
               )}
-              <div className="flex items-center gap-2 w-full">
-                <span className="text-lg">{preset.icon}</span>
-                <span className="text-xs font-medium text-left flex-1">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xl">{preset.icon}</span>
+                <span className="text-sm font-semibold text-foreground">
                   {preset.name}
                 </span>
               </div>
-              <span className="text-[10px] text-muted-foreground text-left mt-1 line-clamp-2">
+              <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2 text-left">
                 {preset.description}
-              </span>
-            </Button>
+              </p>
+            </button>
           );
         })}
       </div>
       {selectedPresets.length > 0 && (
-        <p className="text-xs text-primary">
-          {selectedPresets.length} style{selectedPresets.length > 1 ? "s" : ""}{" "}
-          selected - will enhance your prompt
-        </p>
+        <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 rounded-md px-3 py-2">
+          <Check className="w-3.5 h-3.5" />
+          <span>
+            {selectedPresets.length} style{selectedPresets.length > 1 ? "s" : ""} selected
+          </span>
+        </div>
       )}
     </div>
   );

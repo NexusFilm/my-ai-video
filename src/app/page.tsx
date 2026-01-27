@@ -59,9 +59,6 @@ const Home: NextPage = () => {
         <div className="w-full space-y-4 mb-6">
           {/* Style Presets - Collapsible */}
           <AccordionItem title="Style Presets" defaultOpen={false}>
-            <p className="text-xs text-muted-foreground mb-3">
-              Select style presets to enhance your prompt:
-            </p>
             <StylePresetSelector
               selectedPresets={selectedPresets}
               onPresetsChange={setSelectedPresets}
