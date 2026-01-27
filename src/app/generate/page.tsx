@@ -83,6 +83,7 @@ function GeneratePageContent() {
   const [autoHealEnabled, setAutoHealEnabled] = useState(true);
   const [autoFixCount, setAutoFixCount] = useState(0);
   const [agentStatus, setAgentStatus] = useState<"idle" | "monitoring" | "fixing">("idle");
+  const [userCancelled, setUserCancelled] = useState(false);
   const MAX_AUTO_RETRIES = 2;
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
@@ -130,6 +131,14 @@ function GeneratePageContent() {
 
   // Agent Brain: Auto-heal errors
   useEffect(() => {
+    // Don't auto-heal if user cancelled
+    if (userCancelled) {
+      if (agentStatus === "fixing") {
+        setAgentStatus("idle");
+      }
+      return;
+    }
+    
     // Only auto-heal if enabled, not streaming, not compiling, and valid retry count
     if (!autoHealEnabled || isStreaming || isCompiling || autoFixCount >= MAX_AUTO_RETRIES) {
       if (!isStreaming && agentStatus === "fixing") {
@@ -166,7 +175,8 @@ function GeneratePageContent() {
     generationError, 
     autoFixCount, 
     code,
-    agentStatus
+    agentStatus,
+    userCancelled
   ]);
 
   const handleCodeChange = useCallback(
@@ -197,24 +207,36 @@ function GeneratePageContent() {
     [setCode, compileCode],
   );
 
-  // Cleanup debounce on unmount
+  // Cleanup debounce on unmount and cancel all pending requests
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
+      // Cancel all pending API requests when leaving page
+      promptInputRef.current?.cancelAll();
     };
   }, []);
 
   const handleStreamingChange = useCallback((streaming: boolean) => {
     setIsStreaming(streaming);
-      if (!streaming) {
-        setGenerationProgress(null);
-      }
-    // Clear errors when starting a new generation
+    if (!streaming) {
+      setGenerationProgress(null);
+    }
+    // Clear errors and reset cancelled state when starting a new generation
     if (streaming) {
       setGenerationError(null);
+      setUserCancelled(false);
     }
+  }, []);
+
+  // Handle user clicking cancel button
+  const handleCancel = useCallback(() => {
+    setUserCancelled(true);
+    setAgentStatus("idle");
+    setAutoFixCount(0);
+    justFinishedGenerationRef.current = false;
+    promptInputRef.current?.cancelAll();
   }, []);
 
   const handleError = useCallback(
@@ -360,6 +382,7 @@ function GeneratePageContent() {
             onStreamPhaseChange={setStreamPhase}
             onProgressChange={handleProgressChange}
             onError={handleError}
+            onCancel={handleCancel}
             prompt={prompt}
             onPromptChange={setPrompt}
             currentCode={hasGeneratedOnce ? code : undefined}

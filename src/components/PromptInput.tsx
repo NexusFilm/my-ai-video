@@ -71,6 +71,7 @@ export type GenerationErrorType = "validation" | "api";
 export interface PromptInputRef {
   triggerGeneration: () => void;
   triggerFix: (code: string, error: string) => void;
+  cancelAll: () => void;
 }
 
 interface PromptInputProps {
@@ -79,6 +80,7 @@ interface PromptInputProps {
   onStreamPhaseChange?: (phase: StreamPhase) => void;
   onProgressChange?: (progress: number, estimatedTotal: number, current: number) => void;
   onError?: (error: string, type: GenerationErrorType) => void;
+  onCancel?: () => void;
   variant?: "landing" | "editor";
   prompt?: string;
   onPromptChange?: (prompt: string) => void;
@@ -112,6 +114,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       onStreamPhaseChange,
       onProgressChange,
       onError,
+      onCancel,
       variant = "editor",
       prompt: controlledPrompt,
       onPromptChange,
@@ -136,6 +139,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const quickFixAbortRef = useRef<AbortController | null>(null);
+    const isCancelledRef = useRef(false);
 
     // Estimate total code length based on prompt complexity
     const estimateCodeLength = (promptText: string): number => {
@@ -428,19 +433,62 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     };
 
     const cancelGeneration = () => {
+      // Mark as cancelled to prevent auto-heal from retrying
+      isCancelledRef.current = true;
+      
+      // Abort main generation request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
-        setIsLoading(false);
-        onStreamingChange?.(false);
-        onStreamPhaseChange?.("idle");
       }
+      
+      // Abort quick-fix request
+      if (quickFixAbortRef.current) {
+        quickFixAbortRef.current.abort();
+        quickFixAbortRef.current = null;
+      }
+      
+      setIsLoading(false);
+      onStreamingChange?.(false);
+      onStreamPhaseChange?.("idle");
+      
+      // Notify parent that user cancelled
+      onCancel?.();
+      
+      console.log("All generation requests cancelled");
     };
+    
+    // Cleanup on unmount - cancel all pending requests
+    useEffect(() => {
+      return () => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+        if (quickFixAbortRef.current) {
+          quickFixAbortRef.current.abort();
+        }
+      };
+    }, []);
 
     // Expose triggerGeneration via ref
     useImperativeHandle(ref, () => ({
-      triggerGeneration: () => runGeneration(),
+      triggerGeneration: () => {
+        isCancelledRef.current = false; // Reset cancelled state
+        runGeneration();
+      },
       triggerFix: async (code: string, error: string) => {
+        // Check if we were cancelled
+        if (isCancelledRef.current) {
+          console.log("Fix skipped - user cancelled");
+          return;
+        }
+        
+        // Cancel any existing quick-fix request
+        if (quickFixAbortRef.current) {
+          quickFixAbortRef.current.abort();
+        }
+        quickFixAbortRef.current = new AbortController();
+        
         // Use quick-fix endpoint for targeted fixes (faster, cheaper)
         try {
           onStreamingChange?.(true);
@@ -450,7 +498,14 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code, error }),
+            signal: quickFixAbortRef.current.signal,
           });
+          
+          // Check again if cancelled during fetch
+          if (isCancelledRef.current) {
+            console.log("Fix aborted - user cancelled");
+            return;
+          }
           
           if (!response.ok) {
             throw new Error("Quick fix failed");
@@ -458,27 +513,47 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           
           const result = await response.json();
           
+          // Final check before applying
+          if (isCancelledRef.current) {
+            console.log("Fix result discarded - user cancelled");
+            return;
+          }
+          
           if (result.fixedCode && result.linesChanged?.length > 0) {
             // Success - apply the targeted fix
             onCodeGenerated?.(result.fixedCode);
             console.log(`Auto-fix applied: ${result.explanation} (lines ${result.linesChanged.join(", ")})`);
           } else {
             // No quick fix available, fall back to full regeneration
+            if (isCancelledRef.current) return;
             console.log("Quick fix unavailable, falling back to full refine...");
             const fixPrompt = `Fix this specific error in the code:\n\nError: ${error}\n\nDo NOT rewrite the entire code. Only fix the specific lines causing the error.`;
             runGeneration(fixPrompt, code);
             return; // runGeneration handles streaming state
           }
         } catch (err) {
+          // Don't log or fallback if it was aborted
+          if (err instanceof Error && err.name === "AbortError") {
+            console.log("Quick fix aborted");
+            return;
+          }
+          if (isCancelledRef.current) return;
+          
           console.error("Quick fix error:", err);
           // Fall back to full regeneration on error
           const fixPrompt = `Fix the following Remotion code which produced this error:\n\nError: ${error}\n\nCode:\n${code}\n\nPlease fix the error while maintaining the original functionality.`;
           runGeneration(fixPrompt, code);
           return;
         } finally {
-          onStreamingChange?.(false);
-          onStreamPhaseChange?.("idle");
+          quickFixAbortRef.current = null;
+          if (!isCancelledRef.current) {
+            onStreamingChange?.(false);
+            onStreamPhaseChange?.("idle");
+          }
         }
+      },
+      cancelAll: () => {
+        cancelGeneration();
       }
     }));
 
