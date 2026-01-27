@@ -23,6 +23,7 @@ import { slide } from "@remotion/transitions/slide";
 import { wipe } from "@remotion/transitions/wipe";
 import { flip } from "@remotion/transitions/flip";
 import { clockWipe } from "@remotion/transitions/clock-wipe";
+import { AssetHelper, getAssetStyle } from "@/lib/asset-helper";
 
 export interface CompilationResult {
   Component: React.ComponentType | null;
@@ -161,6 +162,9 @@ export function compileCode(code: string): CompilationResult {
       "wipe",
       "flip",
       "clockWipe",
+      // Asset helpers
+      "AssetHelper",
+      "getAssetStyle",
       finalCode,
     );
 
@@ -206,6 +210,9 @@ export function compileCode(code: string): CompilationResult {
       wipe,
       flip,
       clockWipe,
+      // Asset helpers
+      AssetHelper,
+      getAssetStyle,
     );
 
     if (typeof Component !== "function") {

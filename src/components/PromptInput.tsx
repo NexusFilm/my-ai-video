@@ -263,9 +263,9 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Add asset data URLs for embedding at the end as reference
         if (assetData.length > 0) {
           const assetEmbeds = assetData
-            .map(a => `- ${a.name}: <img src="${a.dataUrl}" />`)
-            .join("\n");
-          enhancedPrompt += `\n\n## ASSET DATA (use in code):\n${assetEmbeds}`;
+            .map(a => `ASSET: ${a.name}\nDATA_URL: ${a.dataUrl}`)
+            .join("\n\n");
+          enhancedPrompt += `\n\n## ASSET DATA (copy-paste these data URLs into your code):\n\n${assetEmbeds}`;
         }
         
         // Determine which endpoint to use

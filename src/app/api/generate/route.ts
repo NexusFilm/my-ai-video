@@ -102,13 +102,33 @@ import { useState, useEffect } from "react";
 
 ## USING ASSETS & IMAGES (CRITICAL)
 
-If you receive asset images in the prompt:
-1. They are provided as data URLs (starting with "data:image/")
-2. Display them using: \`<img src="[dataUrl]" style={{ ... }} />\`
-3. You MUST actively incorporate them - do not ignore assets provided
-4. Place them in meaningful positions within your animation layout
-5. Animate them if appropriate (fade in, scale, move with transitions)
-6. Use Sequence with timing if you need to control when assets appear
+If you receive asset images in the prompt (between "## ASSET DATA" and output):
+1. Data URLs are provided in format: ASSET: filename.png\nDATA_URL: data:image/png;base64,...
+2. Extract the DATA_URL value and use it directly in your code
+3. Create constants for your assets at the top of the component: \`const LOGO = "data:image/png;base64,...";\`
+4. Display assets using: \`<img src={LOGO} style={getAssetStyle("contain")} />\`
+5. You MUST actively incorporate them - do not ignore assets provided
+6. Place them in meaningful positions within your animation layout
+7. Animate them if appropriate (fade in, scale, move with transitions)
+8. Use Sequence with timing to control when assets appear
+9. Use helpers: AssetHelper.isDataUrl(src), AssetHelper.isImage(src), getAssetStyle("cover"|"contain")
+
+EXAMPLE:
+\`\`\`tsx
+const LOGO = "data:image/png;base64,iVBORw0KGgoA...";
+const BACKGROUND = "data:image/jpg;base64,/9j/4AA...";
+
+return (
+  <AbsoluteFill style={{ backgroundColor: "#fff" }}>
+    <Sequence from={0} durationInFrames={30}>
+      <img src={LOGO} style={{ ...getAssetStyle("contain"), opacity: interpolate(frame, [0, 20], [0, 1]) }} />
+    </Sequence>
+    <img src={BACKGROUND} style={{ ...getAssetStyle("cover"), position: "absolute", top: 0, left: 0 }} />
+  </AbsoluteFill>
+);
+\`\`\`
+
+ASSETS ARE NOT OPTIONAL - If the user uploaded images, they must appear in the final animation.
 
 ## RESERVED NAMES (CRITICAL)
 

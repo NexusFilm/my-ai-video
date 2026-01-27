@@ -30,7 +30,9 @@ RULES:
 
 ASSET HANDLING:
 - Assets are provided as data URLs (e.g., "data:image/...")
-- Display them using: <img src="[dataUrl]" style={{ ... }} />
+- Create constants: const ASSET_NAME = "data:image/..."
+- Display with: <img src={ASSET_NAME} style={getAssetStyle("contain")} />
+- Use helpers: AssetHelper.isDataUrl(src), getAssetStyle("cover"|"contain")
 - When refining to use new assets, ensure they're positioned and animated appropriately
 
 ${styleContext}
