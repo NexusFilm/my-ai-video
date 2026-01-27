@@ -7,6 +7,7 @@ import { PromptInput, type ModelId } from "@/components/PromptInput";
 import { PageLayout } from "@/components/PageLayout";
 import { StylePresetSelector } from "@/components/StylePresetSelector";
 import { ImageUploader, type UploadedImage } from "@/components/ImageUploader";
+import { WebsiteScraper } from "@/components/WebsiteScraper";
 import {
   Select,
   SelectContent,
@@ -67,28 +68,28 @@ const Home: NextPage = () => {
 
   const handleNavigate = (submittedPrompt: string, model: ModelId) => {
     setIsNavigating(true);
-    
+
     // Clear saved state on navigation
     localStorage.removeItem(STORAGE_KEY);
-    
+
     // Encode all settings in URL params
-    const params = new URLSearchParams({ 
-      prompt: submittedPrompt, 
+    const params = new URLSearchParams({
+      prompt: submittedPrompt,
       model,
       aspectRatio,
       motionBlur: motionBlur.toString(),
     });
-    
+
     // Add presets if any
     if (selectedPresets.length > 0) {
       params.set("presets", selectedPresets.join(","));
     }
-    
+
     // Store images in sessionStorage since they can't go in URL
     if (uploadedImages.length > 0) {
       sessionStorage.setItem("uploadedImages", JSON.stringify(uploadedImages));
     }
-    
+
     router.push(`/generate?${params.toString()}`);
   };
 
@@ -100,6 +101,25 @@ const Home: NextPage = () => {
         </h1>
 
         <div className="w-full space-y-4 mb-6">
+          {/* Website Scraper - Generate from URL */}
+          <AccordionItem title="Generate from Website" defaultOpen={false}>
+            <WebsiteScraper
+              onPromptGenerated={setPrompt}
+              onImagesFound={(images) => {
+                // Add scraped images as assets
+                const newImages: UploadedImage[] = images.map((img, i) => ({
+                  id: `scraped_${Date.now()}_${i}`,
+                  url: img.src,
+                  publicUrl: img.src,
+                  type: "asset" as const,
+                  name: img.alt || `Image ${i + 1}`,
+                  uploadStatus: "success" as const,
+                }));
+                setUploadedImages((prev) => [...prev, ...newImages]);
+              }}
+            />
+          </AccordionItem>
+
           {/* Style Presets - Collapsible */}
           <AccordionItem title="Style Presets" defaultOpen={false}>
             <StylePresetSelector
@@ -126,7 +146,9 @@ const Home: NextPage = () => {
                 </label>
                 <Select
                   value={aspectRatio}
-                  onValueChange={(value) => setAspectRatio(value as "16:9" | "9:16")}
+                  onValueChange={(value) =>
+                    setAspectRatio(value as "16:9" | "9:16")
+                  }
                 >
                   <SelectTrigger className="w-full bg-input border-border text-foreground">
                     <SelectValue />
