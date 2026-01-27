@@ -23,7 +23,10 @@ import {
 } from "../../components/PromptInput";
 import { type UploadedImage } from "../../components/ImageUploader";
 import { ProjectsPanel } from "../../components/ProjectsPanel";
-import { type Project, projectStorage } from "../../lib/project-storage";
+import {
+  type Project,
+  supabaseProjectStorage,
+} from "../../lib/supabase-storage";
 import { Button } from "../../components/ui/button";
 import { examples } from "../../examples/code";
 import { useAnimationState } from "../../hooks/useAnimationState";
@@ -353,7 +356,7 @@ function GeneratePageContent() {
 
   // Initialize storage on mount
   useEffect(() => {
-    projectStorage.init().catch(console.error);
+    supabaseProjectStorage.init().catch(console.error);
   }, []);
 
   // Status Indicator - shows when analyzing errors

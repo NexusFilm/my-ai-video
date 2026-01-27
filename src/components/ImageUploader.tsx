@@ -8,6 +8,8 @@ import {
   Eye,
   Link2,
   AlertCircle,
+  Camera,
+  Check,
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Use ref to track current images for async operations
   const imagesRef = useRef(images);
@@ -95,7 +99,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const processFiles = async (files: File[]) => {
     if (files.length === 0) return;
 
-    // Compress files
+    // Compress files - optimized for mobile
     const compressedFiles = await Promise.all(
       files.map(async (file) => {
         try {
@@ -103,9 +107,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             `📦 Compressing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`,
           );
           const compressed = await imageCompression(file, {
-            maxSizeMB: 1,
+            maxSizeMB: 0.8, // Smaller for mobile
             maxWidthOrHeight: 1920,
             useWebWorker: true,
+            initialQuality: 0.8,
           });
           console.log(
             `✓ Compressed to ${(compressed.size / 1024 / 1024).toFixed(2)}MB`,
@@ -236,8 +241,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     [images, onImagesChange],
   );
 
+  // Check if device has camera (mobile)
+  const isMobile =
+    typeof window !== "undefined" &&
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   return (
     <div className="space-y-3">
+      {/* Upload Area - Mobile Optimized */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -245,26 +256,46 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-3 sm:p-4 text-center transition-colors ${
           isDragging
             ? "border-primary bg-primary/10"
             : "border-border bg-background-elevated"
         }`}
       >
-        <Upload className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-xs text-muted-foreground mb-2">
-          Drag & drop images or click to upload
+        <Upload className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground mb-3">
+          {isMobile
+            ? "Tap to upload or take a photo"
+            : "Drag & drop images or click to upload"}
         </p>
-        <div className="flex gap-2 justify-center">
+
+        {/* Mobile-friendly button grid */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 justify-center">
+          {/* Camera button - prominent on mobile */}
+          {isMobile && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={() => cameraInputRef.current?.click()}
+              className="w-full sm:w-auto"
+            >
+              <Camera className="w-4 h-4 mr-2" />
+              Camera
+            </Button>
+          )}
+
           <Button
             type="button"
-            variant="outline"
+            variant={isMobile ? "outline" : "outline"}
             size="sm"
-            onClick={() => document.getElementById("file-input")?.click()}
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full sm:w-auto"
           >
             <ImageIcon className="w-4 h-4 mr-2" />
-            Choose Files
+            {isMobile ? "Gallery" : "Choose Files"}
           </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -274,105 +305,122 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               setUrlError("");
               setIsUrlModalOpen(true);
             }}
+            className={isMobile ? "col-span-2" : ""}
           >
             <Link2 className="w-4 h-4 mr-2" />
             Add URL
           </Button>
         </div>
+
+        {/* Hidden file inputs */}
         <input
-          id="file-input"
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           multiple
           onChange={handleFileInput}
           className="hidden"
         />
+        {/* Camera input for mobile */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileInput}
+          className="hidden"
+        />
       </div>
 
+      {/* Images Grid - Mobile Optimized */}
       {images.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            Click to toggle: Reference (style inspiration) or Asset (use in
-            video)
+            Tap to toggle: Reference (style) or Asset (use in video)
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {images.map((image) => (
               <div
                 key={image.id}
                 className="relative group border border-border rounded-lg overflow-hidden bg-background-elevated"
               >
-                <img
-                  src={image.url}
-                  alt={image.name}
-                  className="w-full h-24 object-cover"
-                />
+                {/* Image Preview */}
+                <div className="relative aspect-square">
+                  <img
+                    src={image.url}
+                    alt={image.name}
+                    className="w-full h-full object-cover"
+                  />
 
-                {image.uploadStatus && image.uploadStatus !== "idle" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    {image.uploadStatus === "uploading" && (
-                      <div className="text-center">
-                        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
-                        <p className="text-xs text-white font-medium">
-                          Uploading...
-                        </p>
+                  {/* Upload Status Overlay */}
+                  {image.uploadStatus &&
+                    image.uploadStatus !== "idle" &&
+                    image.uploadStatus !== "success" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                        {image.uploadStatus === "uploading" && (
+                          <div className="text-center">
+                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-1" />
+                            <p className="text-xs text-white font-medium">
+                              Uploading...
+                            </p>
+                          </div>
+                        )}
+                        {image.uploadStatus === "error" && (
+                          <div className="text-center px-2">
+                            <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-1" />
+                            <p className="text-xs text-white font-medium line-clamp-2">
+                              {image.uploadError || "Error"}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {image.uploadStatus === "success" && (
-                      <div className="text-center">
-                        <div className="text-2xl text-green-500 mb-1">✓</div>
-                        <p className="text-xs text-white font-medium">Ready</p>
-                      </div>
-                    )}
-                    {image.uploadStatus === "error" && (
-                      <div className="text-center px-2">
-                        <div className="text-2xl text-red-500 mb-1">⚠</div>
-                        <p className="text-xs text-white font-medium">
-                          {image.uploadError || "Error"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
 
-                <div className="p-2 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        image.type === "reference" ? "default" : "outline"
-                      }
-                      onClick={() => toggleType(image.id)}
-                      className="flex-1 text-xs"
-                      disabled={image.uploadStatus === "uploading"}
-                    >
-                      {image.type === "reference" ? (
-                        <>
-                          <Eye className="w-3 h-3 mr-1" />
-                          Reference
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="w-3 h-3 mr-1" />
-                          Asset
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      onClick={() => removeImage(image.id)}
-                      className="text-destructive"
-                      disabled={image.uploadStatus === "uploading"}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  {/* Success indicator */}
+                  {image.uploadStatus === "success" && (
+                    <div className="absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+
+                  {/* Remove button */}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(image.id)}
+                    disabled={image.uploadStatus === "uploading"}
+                    className="absolute top-1 left-1 bg-black/60 hover:bg-black/80 rounded-full p-1 transition-colors"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                </div>
+
+                {/* Controls */}
+                <div className="p-2 space-y-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={image.type === "reference" ? "default" : "outline"}
+                    onClick={() => toggleType(image.id)}
+                    className="w-full text-xs h-7"
+                    disabled={image.uploadStatus === "uploading"}
+                  >
+                    {image.type === "reference" ? (
+                      <>
+                        <Eye className="w-3 h-3 mr-1" />
+                        Reference
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-3 h-3 mr-1" />
+                        Asset
+                      </>
+                    )}
+                  </Button>
+
                   {image.type === "reference" && (
                     <input
                       type="text"
-                      placeholder="What should I notice?"
+                      placeholder="What to notice?"
                       value={image.description || ""}
                       onChange={(e) =>
                         updateDescription(image.id, e.target.value)
@@ -380,6 +428,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                       className="w-full px-2 py-1 text-xs rounded border border-border bg-input text-foreground focus:outline-none focus:border-primary"
                     />
                   )}
+
                   <p className="text-xs text-muted-foreground truncate">
                     {image.name}
                   </p>
@@ -390,9 +439,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         </div>
       )}
 
+      {/* URL Modal - Mobile Optimized */}
       {isUrlModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
-          <div className="bg-background-elevated border border-border rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:px-4">
+          <div className="bg-background-elevated border-t sm:border border-border rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-md p-4 sm:p-5 space-y-4 animate-in slide-in-from-bottom sm:slide-in-from-bottom-0">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-full bg-primary/10 text-primary">
                 <Link2 className="w-4 h-4" />
@@ -402,7 +452,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                   Add image by URL
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Paste a direct image link (.png, .jpg, .gif, .webp, .svg)
+                  Paste a direct image link
                 </p>
               </div>
             </div>
@@ -410,7 +460,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             <div className="space-y-2">
               <input
                 autoFocus
-                type="text"
+                type="url"
+                inputMode="url"
                 value={urlValue}
                 onChange={(e) => setUrlValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -420,21 +471,21 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                   }
                 }}
                 placeholder="https://example.com/image.jpg"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-3 rounded-lg border border-border bg-input text-foreground text-base focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {urlError && (
-                <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2 py-1">
-                  <AlertCircle className="w-3 h-3" />
+                <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2 py-1.5">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>{urlError}</span>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex gap-2 pt-1">
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                className="flex-1"
                 onClick={() => {
                   setIsUrlModalOpen(false);
                   setUrlValue("");
@@ -443,7 +494,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               >
                 Cancel
               </Button>
-              <Button type="button" size="sm" onClick={handleUrlSubmit}>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={handleUrlSubmit}
+              >
                 Add Image
               </Button>
             </div>
