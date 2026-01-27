@@ -160,29 +160,22 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       try {
         const provider = getModelProvider(model);
         
-        // Add aspect ratio context to the prompt
-        const dimensions = aspectRatio === "16:9" 
-          ? "1920x1080 (16:9 landscape for YouTube)" 
-          : "1080x1920 (9:16 portrait for TikTok/Instagram)";
-        
-        const contextualPrompt = `[Format: ${dimensions}]\n\n${prompt}`;
-        
         // Determine which endpoint to use
         let endpoint = "/api/generate";
-        let body: Record<string, unknown> = { prompt: contextualPrompt, model };
+        let body: Record<string, unknown> = { prompt, model };
         
         if (isRefineMode && currentCode) {
           // Use refine endpoint for context-aware editing
           endpoint = "/api/refine";
           body = {
             currentCode,
-            refinementPrompt: contextualPrompt,
+            refinementPrompt: prompt,
             previousPrompts: getPromptHistory(),
           };
         } else if (provider === "google") {
           // Use Gemini endpoint
           endpoint = "/api/generate-gemini";
-          body = { prompt: contextualPrompt, model };
+          body = { prompt, model };
         }
 
         const response = await fetch(endpoint, {

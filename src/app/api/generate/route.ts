@@ -7,6 +7,7 @@ import {
   SKILL_NAMES,
   type SkillName,
 } from "@/skills";
+import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -184,9 +185,12 @@ export async function POST(req: Request) {
 
   // Load skill-specific content and enhance the system prompt
   const skillContent = getCombinedSkillContent(detectedSkills);
-  const enhancedSystemPrompt = skillContent
+  let enhancedSystemPrompt = skillContent
     ? `${SYSTEM_PROMPT}\n\n## SKILL-SPECIFIC GUIDANCE\n${skillContent}`
     : SYSTEM_PROMPT;
+  
+  // Apply Nexus Flavor enhancements
+  enhancedSystemPrompt = getEnhancedSystemPrompt(enhancedSystemPrompt);
 
   try {
     const result = streamText({
