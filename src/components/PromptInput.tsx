@@ -274,6 +274,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Assets and references come FIRST for higher priority in AI reasoning
         const appRules = `## APP RULES (always apply)
       - Use Remotion/React: generate a single component, keep imports intact
+      - CRITICAL: NO trailing commas in import statements. Use: } from "remotion"; NOT }, from "remotion";
       - For images: use standard HTML <img> tags (lowercase), NEVER <Img> or Image components
       - For audio: use 'new Audio()' constructor, NEVER 'Audio()' without new
       - Use provided assets (URLs) visibly in the animation with <img src="..."> syntax
