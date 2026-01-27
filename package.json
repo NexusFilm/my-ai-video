@@ -31,6 +31,7 @@
     "@remotion/three": "4.0.409",
     "@remotion/transitions": "4.0.409",
     "ai": "5.0.104",
+    "browser-image-compression": "^2.0.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "0.555.0",

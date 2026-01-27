@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Upload, X, Image as ImageIcon, Eye, Link2, AlertCircle } from "lucide-react";
+import imageCompression from "browser-image-compression";
 import { Button } from "@/components/ui/button";
 
 export interface UploadedImage {
@@ -89,8 +90,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       onImagesChange(updatedImages);
 
       try {
+        // Compress the image before uploading
+        console.log(`📦 Compressing image: ${image.name} (original: ${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
+        const compressedFile = await imageCompression(image.file, {
+          maxSizeMB: 1, // Max 1MB
+          maxWidthOrHeight: 1920, // Max 1920px on longest side
+          useWebWorker: true,
+        });
+        
+        const originalSize = (image.file.size / 1024 / 1024).toFixed(2);
+        const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
+        console.log(`✓ Compressed: ${originalSize}MB → ${compressedSize}MB`);
+
         const formData = new FormData();
-        formData.append("file", image.file);
+        formData.append("file", compressedFile, image.name);
         const response = await fetch("/api/upload-asset", {
           method: "POST",
           body: formData,

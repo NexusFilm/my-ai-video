@@ -303,40 +303,13 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       - Prefer lightweight animations; avoid heavy DOM or unnecessary reflows`;
         let promptParts: string[] = [];
         
-        // Add assets with high priority upfront (cache images server-side to avoid massive prompts)
-        let imageIds: Array<{ name: string; imageId: string }> = [];
-        
+        // Add assets with high priority upfront
         if (assetData.length > 0) {
-          // Cache images server-side and send only image IDs to avoid bloating the prompt
-          imageIds = await Promise.all(
-            assetData.map(async (asset) => {
-              try {
-                const response = await fetch("/api/cache-image", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    imageData: asset.url, // base64 data URL
-                    name: asset.name,
-                  }),
-                });
-                if (!response.ok) {
-                  throw new Error(`Cache failed: ${response.status}`);
-                }
-                const data = await response.json();
-                return { name: asset.name, imageId: data.imageId };
-              } catch (err) {
-                console.error(`Failed to cache image ${asset.name}:`, err);
-                // Fallback: if caching fails, use the URL directly (will be in prompt)
-                return { name: asset.name, imageId: `url:${asset.url}` };
-              }
-            })
-          );
-          
-          const assetList = imageIds
-            .map((a, i) => `${i + 1}. "${a.name}" → IMAGE_ID[${a.imageId}]`)
+          const assetList = assetData
+            .map((a, i) => `${i + 1}. "${a.name}" → ${a.url}`)
             .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE (${imageIds.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- The IMAGE_ID[...] references will be replaced with actual URLs by the server\n- Use them directly in <img src=\"...\" /> tags\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: <img src="IMAGE_ID[...]" style={{borderRadius: "50%", width: "200px"}} />`
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- Use the URLs provided above directly in <img src=\"...\" /> tags\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: <img src="https://..." style={{borderRadius: "50%", width: "200px"}} />`
           );
         }
 
@@ -378,11 +351,6 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Determine which endpoint to use
         let endpoint = "/api/generate";
         let body: Record<string, unknown> = { prompt: enhancedPrompt, model };
-        
-        // Add image IDs if we cached any images
-        if (imageIds.length > 0) {
-          body.imageIds = imageIds;
-        }
         
         // Use the overridden code (for auto-fix) or the current code (for refinement)
         const codeContext = overrideCode || (isRefineMode ? currentCode : undefined);

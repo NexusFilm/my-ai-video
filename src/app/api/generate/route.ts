@@ -12,7 +12,6 @@ import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 import { setLastPrompt } from "@/lib/prompt-debug";
-import { getCachedImage } from "@/lib/image-cache";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -470,38 +469,7 @@ NEVER use these as variable names - they shadow imports:
 `;
 
 export async function POST(req: Request) {
-  const { prompt, model = "gpt-5-mini", imageIds = [] } = await req.json();
-
-  // Resolve image IDs to actual base64 data and insert into prompt
-  let finalPrompt = prompt;
-  if (imageIds.length > 0) {
-    console.log(`Resolving ${imageIds.length} image IDs from cache...`);
-    
-    for (const imageId of imageIds) {
-      if (typeof imageId.imageId === "string" && imageId.imageId.startsWith("url:")) {
-        // Fallback: URL was embedded directly (cache failed)
-        finalPrompt = finalPrompt.replace(
-          `IMAGE_ID[${imageId.imageId}]`,
-          imageId.imageId.substring(4) // Remove "url:" prefix
-        );
-      } else {
-        // Resolve from cache
-        const cached = getCachedImage(imageId.imageId);
-        if (cached) {
-          console.log(`✓ Resolved image "${imageId.name}" from cache`);
-          finalPrompt = finalPrompt.replace(
-            `IMAGE_ID[${imageId.imageId}]`,
-            cached.data
-          );
-        } else {
-          console.warn(`⚠ Image cache miss for ID: ${imageId.imageId}`);
-          // Leave the placeholder - model will see IMAGE_ID[...] and understand context
-        }
-      }
-    }
-    
-    console.log(`Final prompt length: ${finalPrompt.length} characters`);
-  }
+  const { prompt, model = "gpt-5-mini" } = await req.json();
 
   // Emergency kill switch to stop all outbound AI calls
   if (process.env.API_DISABLED === "true") {
@@ -557,7 +525,7 @@ export async function POST(req: Request) {
     const validationResult = await generateObject({
       model: openai("gpt-4o"),
       system: VALIDATION_PROMPT,
-      prompt: `User prompt: "${finalPrompt}"`,
+      prompt: `User prompt: "${prompt}"`,
       schema: z.object({ valid: z.boolean() }),
     });
 
@@ -582,7 +550,7 @@ export async function POST(req: Request) {
     const skillResult = await generateObject({
       model: openai("gpt-4o"),
       system: SKILL_DETECTION_PROMPT,
-      prompt: `User prompt: "${finalPrompt}"`,
+      prompt: `User prompt: "${prompt}"`,
       schema: z.object({
         skills: z.array(z.enum(SKILL_NAMES)),
       }),
@@ -613,14 +581,14 @@ export async function POST(req: Request) {
   enhancedSystemPrompt = getEnhancedSystemPrompt(enhancedSystemPrompt);
 
   // Save prompt for debugging
-  setLastPrompt(finalPrompt);
-  console.log(`Saved prompt for debugging (length: ${finalPrompt.length} chars, image IDs resolved: ${imageIds.length})`);
+  setLastPrompt(prompt);
+  console.log(`Saved prompt for debugging (length: ${prompt.length} chars)`);
 
   try {
     const result = streamText({
       model: openai(modelName),
       system: enhancedSystemPrompt,
-      prompt: finalPrompt,
+      prompt,
       ...(reasoningEffort && {
         providerOptions: {
           openai: {
@@ -632,7 +600,7 @@ export async function POST(req: Request) {
 
     console.log(
       "Generating React component with prompt length:",
-      finalPrompt.length,
+      prompt.length,
       "model:",
       modelName,
       "skills:",
