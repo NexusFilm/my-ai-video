@@ -12,6 +12,7 @@ import {
   Disc,
   Mic,
   MicOff,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -92,6 +93,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const [model, setModel] = useState<ModelId>("gpt-5.2:low");
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isEnhancing, setIsEnhancing] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
@@ -100,6 +102,19 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       controlledPrompt !== undefined ? controlledPrompt : uncontrolledPrompt;
     const setPrompt = onPromptChange || setUncontrolledPrompt;
     const [isLoading, setIsLoading] = useState(false);
+
+    // Load and save prompt history for style learning
+    const savePromptToHistory = (prompt: string) => {
+      const history = JSON.parse(localStorage.getItem("promptHistory") || "[]");
+      history.push(prompt);
+      // Keep last 20 prompts
+      const recentHistory = history.slice(-20);
+      localStorage.setItem("promptHistory", JSON.stringify(recentHistory));
+    };
+
+    const getPromptHistory = (): string[] => {
+      return JSON.parse(localStorage.getItem("promptHistory") || "[]");
+    };
 
     const runGeneration = async () => {
       if (!prompt.trim() || isLoading) return;
@@ -269,9 +284,39 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       }
     };
 
+    const enhancePrompt = async () => {
+      if (!prompt.trim() || isEnhancing) return;
+
+      setIsEnhancing(true);
+      try {
+        const previousPrompts = getPromptHistory();
+        
+        const response = await fetch("/api/enhance-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, previousPrompts }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Enhancement failed");
+        }
+
+        const data = await response.json();
+        setPrompt(data.enhancedPrompt);
+      } catch (error) {
+        console.error("Enhancement error:", error);
+        onError?.("Failed to enhance prompt", "api");
+      } finally {
+        setIsEnhancing(false);
+      }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!prompt.trim()) return;
+
+      // Save prompt to history for style learning
+      savePromptToHistory(prompt);
 
       // Landing variant uses navigation instead of API call
       if (isLanding && onNavigate) {
@@ -348,6 +393,19 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                     ))}
                   </SelectContent>
                 </Select>
+
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={enhancePrompt}
+                  disabled={!prompt.trim() || isDisabled || isEnhancing}
+                  loading={isEnhancing}
+                  className="text-purple-500 hover:text-purple-400"
+                  title="Enhance prompt with AI"
+                >
+                  <Sparkles className="w-5 h-5" />
+                </Button>
 
                 <Button
                   type="button"
