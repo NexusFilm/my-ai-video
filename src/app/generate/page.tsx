@@ -100,7 +100,6 @@ function GeneratePageContent() {
     linesChanged: number[];
   } | null>(null);
   const [isAnalyzingError, setIsAnalyzingError] = useState(false);
-  const [userCancelled, setUserCancelled] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<{
     currentUsage: number;
@@ -289,7 +288,6 @@ function GeneratePageContent() {
     // Clear errors and reset state when starting a new generation
     if (streaming) {
       setGenerationError(null);
-      setUserCancelled(false);
       setIsRateLimited(false);
       setSuggestedFix(null);
     }
@@ -297,7 +295,6 @@ function GeneratePageContent() {
 
   // Handle user clicking cancel button
   const handleCancel = useCallback(() => {
-    setUserCancelled(true);
     setIsRateLimited(false);
     setSuggestedFix(null);
     justFinishedGenerationRef.current = false;
