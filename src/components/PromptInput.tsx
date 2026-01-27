@@ -249,9 +249,21 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Process asset images - use URLs directly to avoid massive base64 bloat
         const assetData = await Promise.all(
           assets.map(async (asset) => {
-            console.log(`Processing asset: ${asset.name}, has file: ${!!asset.file}, url type: ${asset.url.substring(0, 20)}`);
+            console.log(`Processing asset: ${asset.name}, has publicUrl: ${!!asset.publicUrl}, url type: ${asset.url.substring(0, 20)}`);
             
-            // If we have the original file, upload to server and get a public URL
+            // If we already have a publicUrl from the auto-upload, use it
+            if (asset.publicUrl) {
+              console.log(`Using pre-uploaded URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.publicUrl, source: "pre-uploaded" };
+            }
+            
+            // For remote URLs, use them directly (avoids massive base64 bloat)
+            if (asset.url?.startsWith("http")) {
+              console.log(`Using remote URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.url, source: "remote" };
+            }
+            
+            // If we have the original file but no publicUrl, upload to server
             if (asset.file) {
               const formData = new FormData();
               formData.append("file", asset.file);
@@ -270,14 +282,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                 return { name: asset.name, url: publicUrl, source: "upload" };
               } catch (err) {
                 console.error(`Failed to upload asset ${asset.name}:`, err);
-                // Fall through to use remote URL directly
+                throw new Error(`Failed to upload asset "${asset.name}": ${err instanceof Error ? err.message : "Unknown error"}`);
               }
-            }
-
-            // For remote URLs, use them directly (avoids massive base64 bloat)
-            if (asset.url?.startsWith("http")) {
-              console.log(`Using remote URL for asset: ${asset.name}`);
-              return { name: asset.name, url: asset.url, source: "remote" };
             }
 
             // If we reach here, the asset is unusable – stop generation with a clear error
