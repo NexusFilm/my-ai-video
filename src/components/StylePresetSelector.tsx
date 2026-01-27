@@ -1,7 +1,6 @@
 "use client";
 
 import { STYLE_PRESETS } from "@/lib/style-presets";
-import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
 interface StylePresetSelectorProps {
