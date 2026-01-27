@@ -303,11 +303,11 @@ function GeneratePageContent() {
         </div>
       }
     >
-      <div className="flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8">
+      <div className="flex flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-8 gap-6">
         {/* Main content area with editor and player */}
-        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 min-h-0">
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8">
           {/* Code Editor */}
-          <div className="flex-1 lg:flex-[3] h-[600px]">
+          <div className="flex-1 lg:flex-[3] h-[500px] lg:h-[600px]">
             <CodeEditor
               code={hasGeneratedOnce && !generationError ? code : ""}
               onChange={handleCodeChange}
@@ -317,7 +317,7 @@ function GeneratePageContent() {
           </div>
           
           {/* Video Player */}
-          <div className="flex-1 lg:flex-[2.5] h-full">
+          <div className="flex-1 lg:flex-[2.5] min-h-[400px]">
             <AnimationPlayer
               Component={generationError ? null : Component}
               durationInFrames={durationInFrames}
@@ -337,8 +337,8 @@ function GeneratePageContent() {
           </div>
         </div>
 
-        {/* Prompt Input at bottom - fixed height */}
-        <div className="shrink-0">
+        {/* Prompt Input at bottom */}
+        <div className="mt-4 relative">
           <PromptInput
             ref={promptInputRef}
             onCodeGenerated={handleCodeChange}
@@ -358,11 +358,11 @@ function GeneratePageContent() {
           
           {/* Auto-fix helper */}
           {generationError && (
-            <div className="absolute right-0 bottom-full mb-4 z-10 w-full flex justify-end px-12 pointer-events-none">
+            <div className="mt-4 flex justify-center">
               <Button
                 size="sm"
                 variant="destructive"
-                className="shadow-lg pointer-events-auto animate-in slide-in-from-bottom-2"
+                className="shadow-lg"
                 onClick={() => {
                   promptInputRef.current?.triggerFix(code, generationError.message);
                 }}
