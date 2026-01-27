@@ -41,7 +41,7 @@ Return ONLY the enhanced prompt, nothing else.`;
           { role: "user", content: `Enhance this prompt: ${prompt}` },
         ],
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: 2000,
       }),
     });
 
