@@ -39,6 +39,7 @@ function GeneratePageContent() {
     message: string;
     type: GenerationErrorType;
   } | null>(null);
+  const [isRefineMode, setIsRefineMode] = useState(false);
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -157,6 +158,9 @@ function GeneratePageContent() {
           onError={handleError}
           prompt={prompt}
           onPromptChange={setPrompt}
+          currentCode={hasGeneratedOnce ? code : undefined}
+          isRefineMode={isRefineMode}
+          onRefineModeChange={setIsRefineMode}
         />
       </div>
     </PageLayout>

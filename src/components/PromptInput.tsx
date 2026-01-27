@@ -13,6 +13,8 @@ import {
   Mic,
   MicOff,
   Sparkles,
+  X,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -38,14 +40,23 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 export const MODELS = [
-  { id: "gpt-5.2:none", name: "GPT-5.2 (No Reasoning)" },
-  { id: "gpt-5.2:low", name: "GPT-5.2 (Low Reasoning)" },
-  { id: "gpt-5.2:medium", name: "GPT-5.2 (Medium Reasoning)" },
-  { id: "gpt-5.2:high", name: "GPT-5.2 (High Reasoning)" },
-  { id: "gpt-5.2-pro:medium", name: "GPT-5.2 Pro (Medium)" },
-  { id: "gpt-5.2-pro:high", name: "GPT-5.2 Pro (High)" },
-  { id: "gpt-5.2-pro:xhigh", name: "GPT-5.2 Pro (XHigh)" },
+  { id: "gpt-5.2:none", name: "GPT-5.2 (No Reasoning)", provider: "openai" },
+  { id: "gpt-5.2:low", name: "GPT-5.2 (Low Reasoning)", provider: "openai" },
+  { id: "gpt-5.2:medium", name: "GPT-5.2 (Medium Reasoning)", provider: "openai" },
+  { id: "gpt-5.2:high", name: "GPT-5.2 (High Reasoning)", provider: "openai" },
+  { id: "gpt-5.2-pro:medium", name: "GPT-5.2 Pro (Medium)", provider: "openai" },
+  { id: "gpt-5.2-pro:high", name: "GPT-5.2 Pro (High)", provider: "openai" },
+  { id: "gpt-5.2-pro:xhigh", name: "GPT-5.2 Pro (XHigh)", provider: "openai" },
+  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: "google" },
+  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", provider: "google" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "google" },
 ] as const;
+
+// Helper to get provider from model ID
+const getModelProvider = (modelId: ModelId): "openai" | "google" => {
+  const model = MODELS.find(m => m.id === modelId);
+  return model?.provider || "openai";
+};
 
 export type ModelId = (typeof MODELS)[number]["id"];
 
@@ -71,6 +82,12 @@ interface PromptInputProps {
   isNavigating?: boolean;
   /** Whether to show the "View Code examples" link (landing variant) */
   showCodeExamplesLink?: boolean;
+  /** Current code for refine mode */
+  currentCode?: string;
+  /** Whether we're in refine mode (editing existing code) */
+  isRefineMode?: boolean;
+  /** Callback when refine mode changes */
+  onRefineModeChange?: (isRefine: boolean) => void;
 }
 
 export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
@@ -86,6 +103,9 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       onNavigate,
       isNavigating = false,
       showCodeExamplesLink = false,
+      currentCode,
+      isRefineMode = false,
+      onRefineModeChange,
     },
     ref,
   ) {
@@ -96,6 +116,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const [isEnhancing, setIsEnhancing] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     // Support both controlled and uncontrolled modes
     const prompt =
@@ -119,14 +140,42 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const runGeneration = async () => {
       if (!prompt.trim() || isLoading) return;
 
+      // Cancel any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       setIsLoading(true);
       onStreamingChange?.(true);
       onStreamPhaseChange?.("reasoning");
+      
       try {
-        const response = await fetch("/api/generate", {
+        const provider = getModelProvider(model);
+        
+        // Determine which endpoint to use
+        let endpoint = "/api/generate";
+        let body: Record<string, unknown> = { prompt, model };
+        
+        if (isRefineMode && currentCode) {
+          // Use refine endpoint for context-aware editing
+          endpoint = "/api/refine";
+          body = {
+            currentCode,
+            refinementPrompt: prompt,
+            previousPrompts: getPromptHistory(),
+          };
+        } else if (provider === "google") {
+          // Use Gemini endpoint
+          endpoint = "/api/generate-gemini";
+          body = { prompt, model };
+        }
+
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, model }),
+          body: JSON.stringify(body),
+          signal: abortControllerRef.current.signal,
         });
 
         if (!response.ok) {
@@ -209,6 +258,10 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           onError?.(validation.error, "validation");
         }
       } catch (error) {
+        // Don't show error if request was cancelled
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         console.error("Error generating code:", error);
         const errorMessage =
           error instanceof Error
@@ -216,6 +269,17 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             : "An unexpected error occurred";
         onError?.(errorMessage, "api");
       } finally {
+        setIsLoading(false);
+        onStreamingChange?.(false);
+        onStreamPhaseChange?.("idle");
+        abortControllerRef.current = null;
+      }
+    };
+
+    const cancelGeneration = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
         setIsLoading(false);
         onStreamingChange?.(false);
         onStreamPhaseChange?.("idle");
@@ -357,11 +421,19 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           className={isLanding ? "w-full max-w-3xl" : ""}
         >
           <div className="bg-background-elevated rounded-xl border border-border p-4">
+            {/* Refine mode indicator */}
+            {isRefineMode && !isLanding && (
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
+                <RefreshCw className="w-4 h-4 text-blue-500" />
+                <span className="text-xs text-blue-500">Refine Mode - Describe what to change</span>
+              </div>
+            )}
+            
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe your animation..."
+              placeholder={isRefineMode ? "Describe what to change (e.g., 'make the text bigger', 'change color to blue')..." : "Describe your animation..."}
               className={`w-full bg-transparent text-foreground placeholder:text-muted-foreground-dim focus:outline-none resize-none overflow-y-auto ${
                 isLanding
                   ? "text-base min-h-[60px] max-h-[200px]"
@@ -394,6 +466,20 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                   </SelectContent>
                 </Select>
 
+                {/* Refine mode toggle - only show in editor variant when there's code */}
+                {!isLanding && currentCode && (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => onRefineModeChange?.(!isRefineMode)}
+                    className={isRefineMode ? "text-blue-500" : "text-muted-foreground"}
+                    title={isRefineMode ? "Refine mode (editing existing)" : "New generation mode"}
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   size="icon-sm"
@@ -424,15 +510,31 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                 </Button>
               </div>
 
-              <Button
-                type="submit"
-                size="icon-sm"
-                disabled={!prompt.trim() || isDisabled}
-                loading={isDisabled}
-                className="bg-foreground text-background hover:bg-gray-200"
-              >
-                <ArrowUp className="w-5 h-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* Cancel button - only show when loading */}
+                {isLoading && (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={cancelGeneration}
+                    className="text-red-500 hover:text-red-400"
+                    title="Cancel generation"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                )}
+
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  disabled={!prompt.trim() || isDisabled}
+                  loading={isDisabled}
+                  className="bg-foreground text-background hover:bg-gray-200"
+                >
+                  <ArrowUp className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
           </div>
 
