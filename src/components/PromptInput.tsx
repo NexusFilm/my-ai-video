@@ -224,26 +224,48 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           })
         );
         
-        // Build enhanced prompt with image context
-        let enhancedPrompt = activePrompt;
+        // Build enhanced prompt with proper asset/reference prioritization
+        // Assets and references come FIRST for higher priority in AI reasoning
+        let promptParts: string[] = [];
         
-        // Apply style preset enhancements
+        // Add assets with high priority upfront
+        if (assetData.length > 0) {
+          const assetDescriptions = assetData.map(a => `- "${a.name}"`).join("\n");
+          promptParts.push(
+            `## REQUIRED ASSETS TO INTEGRATE:\n\nYou MUST incorporate these image assets into the animation. They are critical components:\n${assetDescriptions}\n\nIMPORTANT: These assets must be visible and actively used in the final animation. Embed each asset using: <img src="[dataUrl]" /> with the corresponding data URL provided below.`
+          );
+        }
+        
+        // Add reference analysis
+        if (referenceContext) {
+          promptParts.push(`## VISUAL REFERENCES:\n${referenceContext}`);
+        }
+        
+        // Add user request
+        let userRequestSection = `## YOUR REQUEST:\n${activePrompt}`;
+        
+        // Apply style preset enhancements to the user request
         if (selectedPresets.length > 0 && !overridePrompt) {
           const presetEnhancement = getPresetEnhancement(selectedPresets);
-          enhancedPrompt = `${presetEnhancement}\n\n## USER REQUEST:\n${activePrompt}`;
+          userRequestSection = `${presetEnhancement}\n\n${userRequestSection}`;
           
           // If Vox mode is selected, apply Vox specialist system
           if (selectedPresets.includes("vox")) {
-            enhancedPrompt = getVoxModePrompt(activePrompt);
+            userRequestSection = getVoxModePrompt(activePrompt);
           }
         }
         
-        if (referenceContext) {
-          enhancedPrompt += `\n\n## REFERENCE IMAGES ANALYSIS:\n${referenceContext}`;
-        }
+        promptParts.push(userRequestSection);
+        
+        // Combine all parts
+        let enhancedPrompt = promptParts.join("\n\n");
+        
+        // Add asset data URLs for embedding at the end as reference
         if (assetData.length > 0) {
-          const assetList = assetData.map(a => `- ${a.name}: Use this image in the animation`).join("\n");
-          enhancedPrompt += `\n\n## ASSETS TO USE:\n${assetList}\n\nEmbed these images using: <img src="${assetData[0].dataUrl}" />`;
+          const assetEmbeds = assetData
+            .map(a => `- ${a.name}: <img src="${a.dataUrl}" />`)
+            .join("\n");
+          enhancedPrompt += `\n\n## ASSET DATA (use in code):\n${assetEmbeds}`;
         }
         
         // Determine which endpoint to use

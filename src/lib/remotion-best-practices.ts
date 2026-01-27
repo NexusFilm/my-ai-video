@@ -42,6 +42,14 @@ export const REMOTION_BEST_PRACTICES = `
 - Video - Video playback
 - Audio - Audio playback
 
+### Asset & Image Handling
+- Images provided as data URLs: <img src="data:image/..." style={{ width: "100%", height: "auto" }} />
+- Always use assets when provided in the prompt - they are critical components
+- Position assets meaningfully in the composition
+- Animate assets when appropriate (fade in, scale, translate with Sequence)
+- Multiple assets can be layered: use z-index styling or Sequence timing
+- Example: <img src={assetUrl} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+
 ### Code Structure
 - Export component as: export const MyAnimation: React.FC = () => {}
 - Import from "remotion": { AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, useVideoConfig }
@@ -61,5 +69,7 @@ IMPORTANT RULES:
 5. Use spring() for bouncy, natural animations
 6. Use interpolate() for linear transitions
 7. Keep code clean and well-organized
+8. If assets/images are provided in the prompt, ALWAYS incorporate them actively into the animation
+9. Never ignore provided assets - they are critical to the user's request
 `;
 };

@@ -25,6 +25,14 @@ RULES:
 4. Keep the component name the same
 5. Return ONLY the complete modified code, no explanations
 6. Use Remotion best practices (useCurrentFrame, interpolate, spring, etc.)
+7. If the refinement mentions assets or images, preserve their usage in the code
+8. If new assets are provided, incorporate them into the animation
+
+ASSET HANDLING:
+- Assets are provided as data URLs (e.g., "data:image/...")
+- Display them using: <img src="[dataUrl]" style={{ ... }} />
+- When refining to use new assets, ensure they're positioned and animated appropriately
+
 ${styleContext}
 
 CURRENT CODE:
