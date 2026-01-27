@@ -290,10 +290,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
             .join("\n");
           promptParts.push(
             `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetNames}\n\n**CRITICAL - IMAGE INTEGRATION:**
-- A constant ASSET_URLS object will be available at the top of the code
-- ASSET_URLS['${assetData.map(a => a.name).join("', '")}'] contains the image data
+- A constant ASSET_URLS object is already defined at the top of your code (DO NOT redefine it)
+- ASSET_URLS['${assetData.map(a => a.name).join("', '")}'] contains the image data URLs
 - Use ONLY standard HTML <img> tags (lowercase)
 - Example: <img src={ASSET_URLS['${assetData[0]?.name || 'image'}']} style={{width: "200px"}} />
+- DO NOT try to define or import ASSET_URLS - it's automatically available
 - Position and animate images prominently in your design
 - Do not ignore or mark as "undefined"
 - Ensure images are visible and integrated into the animation`
@@ -455,20 +456,35 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 
         // Inject asset data URLs as a constant if assets were used
         if (assetData.length > 0) {
-          const assetUrlsObject = assetData
-            .map(a => `  '${a.name}': '${a.url}'`)
+          // Build asset URLs object entries, properly escaping the base64 strings
+          const assetEntries = assetData
+            .map(a => {
+              // Escape single quotes in the URL
+              const escapedUrl = a.url.replace(/'/g, "\\'");
+              return `  '${a.name}': '${escapedUrl}'`;
+            })
             .join(",\n");
-          const assetConstant = `\nconst ASSET_URLS = {\n${assetUrlsObject}\n};\n`;
+          const assetConstant = `const ASSET_URLS = {\n${assetEntries}\n};\n\n`;
           
-          // Insert after imports, before export
-          const exportIndex = finalCode.indexOf('export ');
-          if (exportIndex !== -1) {
-            finalCode = finalCode.slice(0, exportIndex) + assetConstant + finalCode.slice(exportIndex);
+          // Find where to insert - after the last import statement
+          const lastImportMatch = finalCode.lastIndexOf('from "');
+          const lastImportEnd = finalCode.indexOf('\n', lastImportMatch) + 1;
+          
+          if (lastImportEnd > 0) {
+            // Insert after the last import
+            finalCode = finalCode.slice(0, lastImportEnd) + "\n" + assetConstant + finalCode.slice(lastImportEnd);
           } else {
-            // If no export found, prepend to the code
-            finalCode = assetConstant + finalCode;
+            // Fallback: insert before export
+            const exportIndex = finalCode.indexOf('export ');
+            if (exportIndex !== -1) {
+              finalCode = finalCode.slice(0, exportIndex) + assetConstant + finalCode.slice(exportIndex);
+            } else {
+              // If no export found, prepend to the code
+              finalCode = assetConstant + finalCode;
+            }
           }
           console.log(`✓ Injected ASSET_URLS constant with ${assetData.length} image(s)`);
+          console.log(`Assets available: ${assetData.map(a => a.name).join(', ')}`);
         }
 
         // Update the editor with the cleaned code
