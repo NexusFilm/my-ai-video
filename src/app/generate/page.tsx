@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import type { NextPage } from "next";
 import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, FolderOpen } from "lucide-react";
 import { CodeEditor } from "../../components/CodeEditor";
 import { AnimationPlayer } from "../../components/AnimationPlayer";
 import { PageLayout } from "../../components/PageLayout";
@@ -14,6 +14,9 @@ import {
   type GenerationErrorType,
 } from "../../components/PromptInput";
 import { type UploadedImage } from "../../components/ImageUploader";
+import { ProjectsPanel } from "../../components/ProjectsPanel";
+import { type Project, projectStorage } from "../../lib/project-storage";
+import { Button } from "../../components/ui/button";
 import { examples } from "../../examples/code";
 import { useAnimationState } from "../../hooks/useAnimationState";
 
@@ -69,6 +72,7 @@ function GeneratePageContent() {
   } | null>(null);
   const [isRefineMode, setIsRefineMode] = useState(false);
   const selectedPresets = urlPresets ? urlPresets.split(",") : [];
+  const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
 
   const { code, Component, error, isCompiling, setCode, compileCode } =
     useAnimationState(examples[0]?.code || "");
@@ -153,8 +157,36 @@ function GeneratePageContent() {
     }
   }, [initialPrompt, hasAutoStarted]);
 
+  const handleLoadProject = useCallback((project: Project) => {
+    setCode(project.code);
+    setPrompt(project.prompt);
+    setDurationInFrames(project.settings.durationInFrames);
+    setFps(project.settings.fps);
+    setAspectRatio(project.settings.aspectRatio);
+    setMotionBlur(project.settings.motionBlur);
+    setHasGeneratedOnce(true);
+    compileCode(project.code);
+  }, [setCode, compileCode]);
+
+  // Initialize storage on mount
+  useEffect(() => {
+    projectStorage.init().catch(console.error);
+  }, []);
+
   return (
-    <PageLayout showLogoAsLink>
+    <PageLayout 
+      showLogoAsLink
+      rightContent={
+        <Button
+          onClick={() => setProjectsPanelOpen(true)}
+          variant="outline"
+          size="sm"
+        >
+          <FolderOpen className="w-4 h-4 mr-2" />
+          Projects
+        </Button>
+      }
+    >
       <div className="flex-1 flex flex-col min-w-0 px-4 md:px-8 lg:px-12 pb-4 md:pb-8 gap-4 md:gap-6 lg:gap-8 h-full overflow-hidden">
         {/* Main content area with editor and player */}
         <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 min-h-0 overflow-hidden">
@@ -209,6 +241,23 @@ function GeneratePageContent() {
           />
         </div>
       </div>
+
+      {/* Projects Panel */}
+      {projectsPanelOpen && (
+        <ProjectsPanel
+          currentCode={code}
+          currentPrompt={prompt}
+          currentSettings={{
+            durationInFrames,
+            fps,
+            aspectRatio,
+            motionBlur,
+            selectedPresets,
+          }}
+          onLoadProject={handleLoadProject}
+          onClose={() => setProjectsPanelOpen(false)}
+        />
+      )}
     </PageLayout>
   );
 }
