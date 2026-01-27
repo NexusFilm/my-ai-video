@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
+import { REMOTION_CONSTRAINTS } from "@/lib/remotion-constraints";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,26 +9,36 @@ export async function POST(request: NextRequest) {
     if (process.env.API_DISABLED === "true") {
       return Response.json(
         { error: "API temporarily disabled", rateLimited: true },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
     // Rate limit check
-    const clientId = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "anonymous";
+    const clientId =
+      request.headers.get("x-forwarded-for") ||
+      request.headers.get("x-real-ip") ||
+      "anonymous";
     const rateLimit = checkRateLimit(`refine:${clientId}`);
-    
+
     if (!rateLimit.allowed) {
       console.log(`Rate limit hit for refine: ${rateLimit.reason}`);
       return Response.json(
         { error: rateLimit.reason || "Rate limit exceeded", rateLimited: true },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)),
+          },
+        },
       );
     }
-    
-    const { currentCode, refinementPrompt, previousPrompts } = await request.json();
+
+    const { currentCode, refinementPrompt, previousPrompts } =
+      await request.json();
 
     // Track token usage for refine
-    const inputTokens = estimateTokens(currentCode) + estimateTokens(refinementPrompt) + 1500; // +1500 for system prompt
+    const inputTokens =
+      estimateTokens(currentCode) + estimateTokens(refinementPrompt) + 1500; // +1500 for system prompt
     const outputTokens = estimateTokens(currentCode); // Output is usually similar size to input code
     const tokenUsage = trackTokenUsage(clientId, inputTokens, outputTokens);
     if (tokenUsage.warning) {
@@ -37,16 +48,19 @@ export async function POST(request: NextRequest) {
     if (!currentCode || !refinementPrompt) {
       return Response.json(
         { error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Build style context
-    const styleContext = previousPrompts?.length > 0
-      ? `\n\nUser's style preferences from previous prompts:\n${previousPrompts.slice(-5).join('\n')}`
-      : '';
+    const styleContext =
+      previousPrompts?.length > 0
+        ? `\n\nUser's style preferences from previous prompts:\n${previousPrompts.slice(-5).join("\n")}`
+        : "";
 
     const systemPrompt = `You are a Remotion motion graphics code refiner. You have existing code and need to modify it based on user feedback.
+
+${REMOTION_CONSTRAINTS}
 
 RULES:
 1. Keep the existing structure and working parts
@@ -57,6 +71,7 @@ RULES:
 6. Use Remotion best practices (useCurrentFrame, interpolate, spring, etc.)
 7. If the refinement mentions assets or images, preserve their usage in the code
 8. If new assets are provided, incorporate them into the animation
+9. NEVER add audio, video, or other unsupported features
 
 ASSET HANDLING:
 - Assets are provided as data URLs (e.g., "data:image/...")
@@ -123,7 +138,11 @@ The user wants to refine this code. Make the requested changes while keeping eve
               const parsed = JSON.parse(data);
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text-delta", delta: content })}\n\n`));
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ type: "text-delta", delta: content })}\n\n`,
+                  ),
+                );
               }
             } catch {}
           }
@@ -143,9 +162,6 @@ The user wants to refine this code. Make the requested changes while keeping eve
     });
   } catch (error) {
     console.error("Refinement error:", error);
-    return Response.json(
-      { error: "Failed to refine code" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to refine code" }, { status: 500 });
   }
 }

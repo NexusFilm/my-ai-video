@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
+import { getConstraintsForError } from "@/lib/remotion-constraints";
 
 interface FixResponse {
   fixedCode: string;
@@ -14,22 +15,30 @@ export async function POST(request: NextRequest) {
     if (process.env.API_DISABLED === "true") {
       return Response.json(
         { error: "API temporarily disabled", rateLimited: true },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
     // Rate limit check - use IP or a session identifier
-    const clientId = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "anonymous";
+    const clientId =
+      request.headers.get("x-forwarded-for") ||
+      request.headers.get("x-real-ip") ||
+      "anonymous";
     const rateLimit = checkRateLimit(`quick-fix:${clientId}`);
-    
+
     if (!rateLimit.allowed) {
       console.log(`Rate limit hit for quick-fix: ${rateLimit.reason}`);
       return Response.json(
         { error: rateLimit.reason || "Rate limit exceeded", rateLimited: true },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)),
+          },
+        },
       );
     }
-    
+
     const { code, error } = await request.json();
 
     // Track token usage (quick fixes use fewer tokens)
@@ -43,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (!code || !error) {
       return Response.json(
         { error: "Missing required fields: code and error" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -52,16 +61,29 @@ export async function POST(request: NextRequest) {
     const errorLine = lineMatch ? parseInt(lineMatch[1], 10) : null;
 
     // Extract context around the error (5 lines before and after if line number known)
-    const codeLines = code.split('\n');
+    const codeLines = code.split("\n");
     let contextStart = 0;
     let contextEnd = codeLines.length;
-    
+
     if (errorLine && errorLine > 0 && errorLine <= codeLines.length) {
       contextStart = Math.max(0, errorLine - 6);
       contextEnd = Math.min(codeLines.length, errorLine + 5);
     }
 
-    const systemPrompt = `You are a surgical code fixer. Your job is to fix ONLY the specific error - do not rewrite the entire code.
+    // Get error-specific constraints
+    const errorConstraints = getConstraintsForError(error);
+
+    const systemPrompt = `You are a surgical code fixer for Remotion animations. Your job is to fix ONLY the specific error - do not rewrite the entire code.
+
+CRITICAL REMOTION LIMITATIONS:
+- NO <Audio> component or new Audio() - Remotion cannot play audio in preview
+- NO <Video> component - video playback not supported in generated code
+- NO built-in shake/wiggle effects - must use Math.sin(frame * speed) * amplitude
+- NO CSS animations or @keyframes - use interpolate() or spring() instead
+- NO setTimeout/setInterval - use frame-based timing
+- Use lowercase <img> tags, not <Img> component
+
+${errorConstraints}
 
 CRITICAL RULES:
 1. Analyze the error message carefully
@@ -69,6 +91,7 @@ CRITICAL RULES:
 3. Return ONLY a JSON object with the fix - no explanations outside the JSON
 4. Preserve ALL other code exactly as-is
 5. Make the MINIMUM change needed to fix the error
+6. If the error is about unsupported features (Audio, Video), REMOVE those lines entirely
 
 RESPONSE FORMAT (strict JSON):
 {
@@ -83,6 +106,7 @@ RESPONSE FORMAT (strict JSON):
 }
 
 COMMON ERRORS AND FIXES:
+- "Cannot find name 'Audio'" → Remove Audio-related code entirely
 - "Cannot find name X" → Check for typos, missing imports, or undefined variables
 - "Unexpected token" → Check for syntax errors, missing brackets, commas
 - "Type X is not assignable" → Fix type mismatch or add type assertion
@@ -94,19 +118,26 @@ If you cannot determine the exact fix, return: { "fixes": [], "explanation": "Un
     const userPrompt = `Fix this error in the Remotion animation code:
 
 ERROR: ${error}
-${errorLine ? `ERROR LINE: ${errorLine}` : ''}
+${errorLine ? `ERROR LINE: ${errorLine}` : ""}
 
 FULL CODE:
 \`\`\`tsx
-${codeLines.map((line: string, i: number) => `${i + 1}: ${line}`).join('\n')}
+${codeLines.map((line: string, i: number) => `${i + 1}: ${line}`).join("\n")}
 \`\`\`
 
-${errorLine ? `
+${
+  errorLine
+    ? `
 CONTEXT AROUND ERROR (lines ${contextStart + 1}-${contextEnd}):
 \`\`\`tsx
-${codeLines.slice(contextStart, contextEnd).map((line: string, i: number) => `${contextStart + i + 1}: ${line}`).join('\n')}
+${codeLines
+  .slice(contextStart, contextEnd)
+  .map((line: string, i: number) => `${contextStart + i + 1}: ${line}`)
+  .join("\n")}
 \`\`\`
-` : ''}
+`
+    : ""
+}
 
 Return ONLY a valid JSON object with the fixes.`;
 
@@ -149,7 +180,7 @@ Return ONLY a valid JSON object with the fixes.`;
       }
 
       const result: FixResponse = {
-        fixedCode: fixedLines.join('\n'),
+        fixedCode: fixedLines.join("\n"),
         explanation: fixData.explanation || "Applied automatic fix",
         linesChanged: changedLineNumbers,
       };
@@ -163,12 +194,11 @@ Return ONLY a valid JSON object with the fixes.`;
       explanation: fixData.explanation || "No automatic fix available",
       linesChanged: [],
     });
-
   } catch (error) {
     console.error("Quick fix error:", error);
     return Response.json(
       { error: "Failed to apply quick fix" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

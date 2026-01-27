@@ -8,10 +8,14 @@ import {
   type SkillName,
 } from "@/skills";
 import { getEnhancedSystemPrompt } from "@/lib/nexus-flavor";
-import { analyzeAIVideoNeed, getHybridSystemPrompt } from "@/lib/ai-video-hybrid";
+import {
+  analyzeAIVideoNeed,
+  getHybridSystemPrompt,
+} from "@/lib/ai-video-hybrid";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
 import { setLastPrompt } from "@/lib/prompt-debug";
+import { REMOTION_CONSTRAINTS } from "@/lib/remotion-constraints";
 
 const VALIDATION_PROMPT = `You are a prompt classifier for a motion graphics generation tool.
 
@@ -460,6 +464,8 @@ NEVER use these as variable names - they shadow imports:
 - Keep colors minimal (2-4 max)
 - ALWAYS set backgroundColor on AbsoluteFill from frame 0 - never fade in backgrounds
 
+${REMOTION_CONSTRAINTS}
+
 ## OUTPUT FORMAT (CRITICAL)
 
 - Output ONLY code - no explanations, no questions
@@ -475,27 +481,43 @@ export async function POST(req: Request) {
   if (process.env.API_DISABLED === "true") {
     return new Response(
       JSON.stringify({ error: "API temporarily disabled", rateLimited: true }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
+      { status: 503, headers: { "Content-Type": "application/json" } },
     );
   }
 
   // Rate limit check
-  const clientId = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
+  const clientId =
+    req.headers.get("x-forwarded-for") ||
+    req.headers.get("x-real-ip") ||
+    "anonymous";
   const rateLimit = checkRateLimit(`generate:${clientId}`);
-  
+
   if (!rateLimit.allowed) {
     console.log(`Rate limit hit for generate: ${rateLimit.reason}`);
     return new Response(
-      JSON.stringify({ error: rateLimit.reason || "Rate limit exceeded", rateLimited: true }),
-      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)) } }
+      JSON.stringify({
+        error: rateLimit.reason || "Rate limit exceeded",
+        rateLimited: true,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000)),
+        },
+      },
     );
   }
 
   // Track estimated token usage (input tokens now, output estimated as ~2x input for code gen)
   const estimatedInputTokens = estimateTokens(prompt) + 2000; // +2000 for system prompt
   const estimatedOutputTokens = 1500; // Average code output
-  const tokenUsage = trackTokenUsage(clientId, estimatedInputTokens, estimatedOutputTokens);
-  
+  const tokenUsage = trackTokenUsage(
+    clientId,
+    estimatedInputTokens,
+    estimatedOutputTokens,
+  );
+
   if (tokenUsage.warning) {
     console.log(`Token usage warning for ${clientId}: ${tokenUsage.warning}`);
   }
@@ -566,17 +588,20 @@ export async function POST(req: Request) {
   let enhancedSystemPrompt = skillContent
     ? `${SYSTEM_PROMPT}\n\n## SKILL-SPECIFIC GUIDANCE\n${skillContent}`
     : SYSTEM_PROMPT;
-  
+
   // Analyze if AI video generation is needed
   const aiVideoAnalysis = await analyzeAIVideoNeed(prompt);
   console.log("AI Video Analysis:", aiVideoAnalysis);
-  
+
   // Apply hybrid system if AI video is needed
   if (aiVideoAnalysis.needed) {
     enhancedSystemPrompt = getHybridSystemPrompt(enhancedSystemPrompt, true);
-    console.log("AI video will be used for:", aiVideoAnalysis.elements.map(e => e.description).join(", "));
+    console.log(
+      "AI video will be used for:",
+      aiVideoAnalysis.elements.map((e) => e.description).join(", "),
+    );
   }
-  
+
   // Apply Nexus Flavor enhancements
   enhancedSystemPrompt = getEnhancedSystemPrompt(enhancedSystemPrompt);
 
