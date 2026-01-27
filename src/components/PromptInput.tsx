@@ -197,12 +197,47 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       try {
         const response = await fetch(url);
         const blob = await response.blob();
-        return await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
-          reader.onerror = () => reject(new Error("Failed to read blob"));
-          reader.readAsDataURL(blob);
-        });
+        
+        // Attempt to resize image using Canvas to avoid 413 Payload Too Large errors
+        try {
+          if (!blob.type.startsWith('image/')) throw new Error("Not an image");
+          
+          const bitmap = await createImageBitmap(blob);
+          const MAX_SIZE = 1024; // Resize to max 1024px to keep prompt size manageable
+          let width = bitmap.width;
+          let height = bitmap.height;
+          
+          if (width > MAX_SIZE || height > MAX_SIZE) {
+            const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas context failed");
+          
+          ctx.drawImage(bitmap, 0, 0, width, height);
+          
+          // Use JPEG 0.8 for non-PNGs to compress efficiently
+          const type = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const resizedDataUrl = canvas.toDataURL(type, 0.8);
+          
+          console.log(`Resized image from ${bitmap.width}x${bitmap.height} to ${width}x${height}. Size: ${resizedDataUrl.length} chars.`);
+          return resizedDataUrl;
+          
+        } catch (resizeErr) {
+          console.warn("Image resize failed, falling back to original:", resizeErr);
+          // Standard FileReader fallback
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => reject(new Error("Failed to read blob"));
+            reader.readAsDataURL(blob);
+          });
+        }
       } catch (err) {
         console.error("Failed to convert URL to data URL:", err);
         return null;
