@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { trackTokenUsage, estimateTokens } from "@/lib/token-tracker";
+import { getCachedImage } from "@/lib/image-cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +25,35 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { currentCode, refinementPrompt, previousPrompts } = await request.json();
+    const { currentCode, refinementPrompt, previousPrompts, imageIds = [] } = await request.json();
+
+    // Resolve image IDs to actual base64 data
+    let finalPrompt = refinementPrompt;
+    if (imageIds.length > 0) {
+      console.log(`Resolving ${imageIds.length} image IDs from cache for refine...`);
+      
+      for (const imageId of imageIds) {
+        if (typeof imageId.imageId === "string" && imageId.imageId.startsWith("url:")) {
+          // Fallback: URL was embedded directly
+          finalPrompt = finalPrompt.replace(
+            `IMAGE_ID[${imageId.imageId}]`,
+            imageId.imageId.substring(4)
+          );
+        } else {
+          // Resolve from cache
+          const cached = getCachedImage(imageId.imageId);
+          if (cached) {
+            console.log(`✓ Resolved image "${imageId.name}" from cache in refine`);
+            finalPrompt = finalPrompt.replace(
+              `IMAGE_ID[${imageId.imageId}]`,
+              cached.data
+            );
+          } else {
+            console.warn(`⚠ Image cache miss for ID: ${imageId.imageId}`);
+          }
+        }
+      }
+    }
 
     // Track token usage for refine
     const inputTokens = estimateTokens(currentCode) + estimateTokens(refinementPrompt) + 1500; // +1500 for system prompt
@@ -84,7 +113,7 @@ The user wants to refine this code. Make the requested changes while keeping eve
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: refinementPrompt },
+          { role: "user", content: finalPrompt },
         ],
         temperature: 0.7,
         max_tokens: 4000,
