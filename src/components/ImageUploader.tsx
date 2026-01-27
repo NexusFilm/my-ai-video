@@ -114,7 +114,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Upload Area */}
+      {/* Upload Area - Compact */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -122,14 +122,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
           isDragging
             ? "border-primary bg-primary/10"
             : "border-border bg-background-elevated"
         }`}
       >
-        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground mb-3">
+        <Upload className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground mb-2">
           Drag & drop images or click to upload
         </p>
         <div className="flex gap-2 justify-center">
@@ -168,7 +168,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             Click image type to toggle between Reference (inspiration) and Asset
             (use in video)
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {images.map((image) => (
               <div
                 key={image.id}
@@ -177,7 +177,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 <img
                   src={image.url}
                   alt={image.name}
-                  className="w-full h-32 object-cover"
+                  className="w-full h-24 object-cover"
                 />
                 <div className="p-2 space-y-2">
                   <div className="flex items-center justify-between gap-2">

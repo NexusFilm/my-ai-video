@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { AccordionItem } from "@/components/ui/accordion";
 
 const Home: NextPage = () => {
   const router = useRouter();
@@ -50,39 +51,33 @@ const Home: NextPage = () => {
 
   return (
     <PageLayout>
-      <div className="flex flex-col items-center justify-center flex-1 px-4 py-8 max-w-5xl mx-auto w-full">
+      <div className="flex flex-col items-center px-4 py-8 max-w-5xl mx-auto w-full min-h-screen">
         <h1 className="text-5xl font-bold text-white mb-10 text-center">
           What do you want to create?
         </h1>
 
-        <div className="w-full space-y-6">
-          {/* Style Presets */}
-          <div className="bg-background-elevated rounded-xl border border-border p-4">
-            <h2 className="text-sm font-semibold text-foreground mb-3">
-              Style Presets
-            </h2>
+        <div className="w-full space-y-4 mb-6">
+          {/* Style Presets - Collapsible */}
+          <AccordionItem title="Style Presets" defaultOpen={false}>
+            <p className="text-xs text-muted-foreground mb-3">
+              Select style presets to enhance your prompt:
+            </p>
             <StylePresetSelector
               selectedPresets={selectedPresets}
               onPresetsChange={setSelectedPresets}
             />
-          </div>
+          </AccordionItem>
 
-          {/* Image Upload */}
-          <div className="bg-background-elevated rounded-xl border border-border p-4">
-            <h2 className="text-sm font-semibold text-foreground mb-3">
-              Images
-            </h2>
+          {/* Image Upload - Collapsible and Compact */}
+          <AccordionItem title="Images" defaultOpen={false}>
             <ImageUploader
               images={uploadedImages}
               onImagesChange={setUploadedImages}
             />
-          </div>
+          </AccordionItem>
 
-          {/* Video Settings */}
-          <div className="bg-background-elevated rounded-xl border border-border p-4">
-            <h2 className="text-sm font-semibold text-foreground mb-3">
-              Video Settings
-            </h2>
+          {/* Video Settings - Collapsible */}
+          <AccordionItem title="Video Settings" defaultOpen={true}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Aspect Ratio */}
               <div className="space-y-2">
@@ -128,9 +123,11 @@ const Home: NextPage = () => {
                 />
               </div>
             </div>
-          </div>
+          </AccordionItem>
+        </div>
 
-          {/* Prompt Input */}
+        {/* Prompt Input */}
+        <div className="w-full">
           <PromptInput
             variant="landing"
             onNavigate={handleNavigate}

@@ -496,19 +496,13 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
       <div
         className={
           isLanding
-            ? "flex flex-col items-center justify-center flex-1 px-4"
+            ? "flex flex-col items-center w-full"
             : "flex flex-col gap-2"
         }
       >
-        {isLanding && (
-          <h1 className="text-5xl font-bold text-white mb-10 text-center">
-            What do you want to create?
-          </h1>
-        )}
-
         <form
           onSubmit={handleSubmit}
-          className={isLanding ? "w-full max-w-3xl" : ""}
+          className={isLanding ? "w-full" : ""}
         >
           <div className="bg-background-elevated rounded-xl border border-border p-4">
             {/* Refine mode indicator */}
