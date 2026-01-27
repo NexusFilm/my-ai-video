@@ -304,12 +304,12 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
           referenceContext = analyses.filter(Boolean).join("\n\n");
         }
         
-        // Convert asset images to data URLs if needed
+        // Process asset images - use URLs directly to avoid massive base64 bloat
         const assetData = await Promise.all(
           assets.map(async (asset) => {
             console.log(`Processing asset: ${asset.name}, has file: ${!!asset.file}, url type: ${asset.url.substring(0, 20)}`);
             
-            // If we have the original file, upload and convert to a data URL on the server
+            // If we have the original file, upload to server and get a public URL
             if (asset.file) {
               const formData = new FormData();
               formData.append("file", asset.file);
@@ -323,27 +323,23 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
                   throw new Error(`Upload failed: ${response.status}`);
                 }
                 const data = await response.json();
-                console.log(`Asset uploaded successfully: ${asset.name}, size: ${data.dataUrl.length} chars`);
-                return { name: asset.name, dataUrl: data.dataUrl, source: "upload" };
+                const publicUrl = data.url || data.dataUrl;
+                console.log(`Asset uploaded successfully: ${asset.name}, URL: ${publicUrl.substring(0, 50)}...`);
+                return { name: asset.name, url: publicUrl, source: "upload" };
               } catch (err) {
                 console.error(`Failed to upload asset ${asset.name}:`, err);
-                // Fall through to client-side conversion
+                // Fall through to use remote URL directly
               }
             }
 
-            // If we only have a URL (e.g., blob: or remote), convert it client-side to ensure the model sees a usable data URL
-            console.log(`Converting URL to data URL for: ${asset.name}`);
-            const dataUrl = await urlToDataUrl(asset.url);
-            if (dataUrl) {
-              console.log(`Successfully converted ${asset.name} to data URL, size: ${dataUrl.length} chars`);
-              return { name: asset.name, dataUrl, source: "converted" };
+            // For remote URLs, use them directly (avoids massive base64 bloat)
+            if (asset.url?.startsWith("http")) {
+              console.log(`Using remote URL for asset: ${asset.name}`);
+              return { name: asset.name, url: asset.url, source: "remote" };
             }
 
             // If we reach here, the asset is unusable – stop generation with a clear error
-            const reason = asset.url?.startsWith("http")
-              ? "Provide a direct image URL (ending with .png/.jpg) instead of a page link."
-              : "Re-upload the image and try again.";
-            throw new Error(`Could not process asset "${asset.name}". ${reason}`);
+            throw new Error(`Could not process asset "${asset.name}". Please re-upload or provide a direct image URL.`);
           })
         );
         
@@ -362,10 +358,10 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Add assets with high priority upfront
         if (assetData.length > 0) {
           const assetList = assetData
-            .map((a, i) => `${i + 1}. "${a.name}" (received via ${a.source})`)
+            .map((a, i) => `${i + 1}. "${a.name}" → ${a.url}`)
             .join("\n");
           promptParts.push(
-            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- Each asset is embedded as a data URL below\n- Use <img src="{dataUrl}" style={{...}} /> to display them\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: const AVATAR = "{dataUrl}"; <img src={AVATAR} style={{borderRadius: "50%"}} />`
+            `## REQUIRED ASSETS TO INTEGRATE (${assetData.length} assets provided):\n\n${assetList}\n\n**CRITICAL**: You MUST visibly incorporate EVERY asset into the animation.\n- Use the URLs provided above directly in <img src=\"...\" /> tags\n- Position and animate them prominently in your design\n- Do not mark them as "undefined" or ignore them\n- Example: <img src="https://..." style={{borderRadius: "50%", width: "200px"}} />`
           );
         }
 
@@ -396,20 +392,12 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         // Combine all parts
         let enhancedPrompt = promptParts.join("\n\n");
         
-        // Add asset data URLs for embedding at the end as reference
+        // Log asset references (no bloat from huge data URLs)
         if (assetData.length > 0) {
-          const assetEmbeds = assetData
-            .map((a, i) => {
-              const urlPreview = a.dataUrl.substring(0, 50) + (a.dataUrl.length > 50 ? "..." : "");
-              console.log(`Asset ${i + 1} (${a.name}): ${urlPreview} (total length: ${a.dataUrl.length})`);
-              return `ASSET ${i + 1}: ${a.name}\nVAR_NAME: ${a.name.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase()}\nDATA_URL: ${a.dataUrl}`;
-            })
-            .join("\n\n");
-          enhancedPrompt += `\n\n## ASSET DATA URLS (REQUIRED - use these exact values in your code):\n\n${assetEmbeds}\n\nINSTRUCTIONS:\n- Copy the DATA_URL value for each asset\n- Create a constant: const [VAR_NAME] = "[DATA_URL]";\n- Use it in your JSX: <img src={[VAR_NAME]} />`;
-          
-          console.log(`Total enhanced prompt length: ${enhancedPrompt.length} characters`);
-          console.log("First 500 chars of prompt:", enhancedPrompt.substring(0, 500));
-          console.log("Last 500 chars of prompt:", enhancedPrompt.substring(Math.max(0, enhancedPrompt.length - 500)));
+          assetData.forEach((a, i) => {
+            console.log(`✓ Asset ${i + 1} (${a.name}): ${a.url}`);
+          });
+          console.log(`Total enhanced prompt length: ${enhancedPrompt.length} characters (images referenced by URL, not embedded as base64)`);
         }
         
         // Determine which endpoint to use
