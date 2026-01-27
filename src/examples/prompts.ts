@@ -60,6 +60,41 @@ The graphic moves smoothly across the screen in a straight line, bouncing off th
 Change the color on every bounce, no rotation, Make the animation speed fast.`,
     color: "#f9a8d4",
   },
+  {
+    id: "logo-reveal",
+    headline: "Logo reveal",
+    icon: "Disc",
+    prompt: `Create a professional logo reveal animation. Start with a dark background, then animate particles or shapes that converge to form a central logo placeholder. Add a subtle glow effect and smooth fade-in. Include a tagline that types in below the logo after it appears.`,
+    color: "#c4b5fd",
+  },
+  {
+    id: "social-post",
+    headline: "Social post",
+    icon: "MessageCircle",
+    prompt: `Create an Instagram-style social media post animation. Show a profile picture, username, and a photo that slides in from the right. Animate the like count going up with a heart animation. Add comments appearing one by one at the bottom.`,
+    color: "#fb7185",
+  },
+  {
+    id: "countdown",
+    headline: "Countdown timer",
+    icon: "Hash",
+    prompt: `Create a dramatic countdown timer from 10 to 0. Each number should scale up and fade out with a pulse effect. Use bold typography and add particle effects on each number change. End with an explosion effect and "GO!" text.`,
+    color: "#f97316",
+  },
+  {
+    id: "text-reveal",
+    headline: "Text reveal",
+    icon: "Type",
+    prompt: `Create a cinematic text reveal animation. Words appear one by one with a blur-to-sharp effect. Use a dark background with white text. Add subtle camera shake and lens flare effects. The text should read "The Future Is Now".`,
+    color: "#22d3ee",
+  },
+  {
+    id: "progress-bar",
+    headline: "Progress bar",
+    icon: "BarChart3",
+    prompt: `Create an animated progress bar that fills from 0% to 100%. Add percentage text that updates in real-time. Include milestone markers at 25%, 50%, 75%. Use a gradient fill and add a glow effect when reaching 100%.`,
+    color: "#4ade80",
+  },
 ] as const;
 
 export type ExamplePrompt = (typeof examplePrompts)[number];
