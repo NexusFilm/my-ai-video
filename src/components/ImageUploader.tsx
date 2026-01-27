@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, X, Image as ImageIcon, Eye } from "lucide-react";
+import { Upload, X, Image as ImageIcon, Eye, Link2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface UploadedImage {
@@ -23,6 +23,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   onImagesChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
+  const [urlValue, setUrlValue] = useState("");
+  const [urlError, setUrlError] = useState("");
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -65,19 +68,36 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     [images, onImagesChange]
   );
 
-  const handleUrlAdd = useCallback(() => {
-    const url = prompt("Enter image URL:");
-    if (!url) return;
+  const handleUrlSubmit = useCallback(() => {
+    setUrlError("");
+    const raw = urlValue.trim();
+    if (!raw) {
+      setUrlError("Please enter an image URL.");
+      return;
+    }
+    try {
+      const parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+      const href = parsed.toString();
+      const looksLikeImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(parsed.pathname);
+      if (!looksLikeImage) {
+        setUrlError("Use a direct image link ending in .png, .jpg, .gif, .webp, or .svg.");
+        return;
+      }
 
-    const newImage: UploadedImage = {
-      id: Math.random().toString(36).substring(7),
-      url,
-      type: "asset",
-      name: url.split("/").pop() || "Image",
-    };
+      const newImage: UploadedImage = {
+        id: Math.random().toString(36).substring(7),
+        url: href,
+        type: "asset",
+        name: parsed.pathname.split("/").pop() || "Image",
+      };
 
-    onImagesChange([...images, newImage]);
-  }, [images, onImagesChange]);
+      onImagesChange([...images, newImage]);
+      setIsUrlModalOpen(false);
+      setUrlValue("");
+    } catch (err) {
+      setUrlError("That URL is not valid.");
+    }
+  }, [images, onImagesChange, urlValue]);
 
   const toggleType = useCallback(
     (id: string) => {
@@ -146,8 +166,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             type="button"
             variant="outline"
             size="sm"
-            onClick={handleUrlAdd}
+            onClick={() => {
+              setUrlValue("");
+              setUrlError("");
+              setIsUrlModalOpen(true);
+            }}
           >
+            <Link2 className="w-4 h-4 mr-2" />
             Add URL
           </Button>
         </div>
@@ -227,6 +252,63 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {isUrlModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-background-elevated border border-border rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-full bg-primary/10 text-primary">
+                <Link2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Add image by URL</h3>
+                <p className="text-xs text-muted-foreground mt-1">Paste a direct image link (must end with .png, .jpg, .gif, .webp, or .svg).</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <input
+                autoFocus
+                type="text"
+                value={urlValue}
+                onChange={(e) => setUrlValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleUrlSubmit();
+                  }
+                }}
+                placeholder="https://example.com/image.jpg"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {urlError && (
+                <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2 py-1">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{urlError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsUrlModalOpen(false);
+                  setUrlValue("");
+                  setUrlError("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="button" size="sm" onClick={handleUrlSubmit}>
+                Add Image
+              </Button>
+            </div>
           </div>
         </div>
       )}
