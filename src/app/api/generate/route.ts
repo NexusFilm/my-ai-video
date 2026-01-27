@@ -383,18 +383,18 @@ import { useState, useEffect } from "react";
 ## USING ASSETS & IMAGES (CRITICAL - DO NOT SKIP)
 
 If you receive asset URLs in the prompt (look for "## REQUIRED ASSETS TO INTEGRATE" section):
-1. **EXTRACT the URL values** - they are in format: /uploads/filename.jpg or https://...
-2. **Import Remotion's staticFile and Img** at the top:
+1. **EXTRACT the URL values** - they are in format: data:image/... (base64 encoded) or https://...
+2. **Import Remotion's Img** at the top:
    \`\`\`jsx
-   import { Img, staticFile } from 'remotion';
+   import { Img } from 'remotion';
    \`\`\`
-3. **Use staticFile() for uploaded assets** (saved to /public/uploads/):
-   - For uploads: \`<Img src={staticFile('/uploads/filename.jpg')} style={{...}} />\`
+3. **Use Img component with data URLs**:
+   - For uploaded assets: \`<Img src="data:image/jpeg;base64,..." style={{...}} />\`
    - For external URLs: \`<Img src="https://external-url.com/image.jpg" style={{...}} />\`
 4. **Style with Remotion's Img component** (not plain <img>):
    \`\`\`jsx
    <Img 
-     src={staticFile('/uploads/photo.jpg')} 
+     src="data:image/png;base64,iVBORw0KGgo..." 
      style={{
        width: '100%',
        height: 'auto',
@@ -407,31 +407,31 @@ If you receive asset URLs in the prompt (look for "## REQUIRED ASSETS TO INTEGRA
 6. **Do NOT ignore provided assets** - every asset listed must be used
 
 WHAT DOES NOT WORK (DO NOT DO THIS):
-- Using bare URLs without staticFile: \`<img src="/uploads/file.jpg" />\` ❌ WRONG
 - Not using Img component: \`<img src={...} />\` ❌ WRONG - use Remotion's <Img />
 - Ignoring assets in the REQUIRED ASSETS section ❌ WRONG - use them all
+- Marking images as "undefined" ❌ WRONG - use the provided URLs
 
 WHAT WORKS (DO THIS):
-- \`import { Img, staticFile } from 'remotion';\` ✅ CORRECT
-- \`<Img src={staticFile('/uploads/photo.jpg')} style={{...}} />\` ✅ CORRECT
+- \`import { Img } from 'remotion';\` ✅ CORRECT
+- \`<Img src="data:image/png;base64,..." style={{...}} />\` ✅ CORRECT
 - \`<Img src="https://example.com/image.jpg" style={{...}} />\` ✅ CORRECT
 - Position assets prominently in AbsoluteFill or Sequence ✅ CORRECT
 
 EXAMPLE - If you receive:
 \`\`\`
 ## REQUIRED ASSETS TO INTEGRATE (1 assets provided):
-1. "logo.png" → /uploads/1234567-abcdef.png
+1. "logo.png" → data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
 \`\`\`
 
 Then your code must have:
 \`\`\`tsx
-import { AbsoluteFill, Img, staticFile } from 'remotion';
+import { AbsoluteFill, Img } from 'remotion';
 
 export const MyAnimation = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       <Img 
-        src={staticFile('/uploads/1234567-abcdef.png')} 
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" 
         style={{
           width: 300,
           height: 300,

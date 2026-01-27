@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,29 +21,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), "public", "uploads");
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
-    // Generate filename with timestamp to avoid collisions
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    const ext = file.name.split('.').pop() || 'jpg';
-    const filename = `${timestamp}-${random}.${ext}`;
-    const filepath = join(uploadsDir, filename);
-
-    // Save file to disk
+    // Convert to base64 for client-side storage
     const bytes = await file.arrayBuffer();
     const buffer = new Uint8Array(bytes);
-    await writeFile(filepath, buffer);
-
-    // Return the public URL path
-    const publicUrl = `/uploads/${filename}`;
+    const binary = String.fromCharCode(...buffer);
+    const base64 = btoa(binary);
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
     return NextResponse.json({
-      url: publicUrl,
+      url: dataUrl,
       name: file.name,
       size: file.size,
       type: file.type,
