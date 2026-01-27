@@ -99,17 +99,20 @@ function extractMetaDescription(html: string): string {
 
 function extractHeadings(html: string): string[] {
   const headings: string[] = [];
-  const h1Matches = html.matchAll(/<h1[^>]*>([^<]+)<\/h1>/gi);
-  const h2Matches = html.matchAll(/<h2[^>]*>([^<]+)<\/h2>/gi);
 
-  for (const match of h1Matches) {
+  // Use exec in a loop instead of matchAll for better compatibility
+  const h1Regex = /<h1[^>]*>([^<]+)<\/h1>/gi;
+  const h2Regex = /<h2[^>]*>([^<]+)<\/h2>/gi;
+
+  let match;
+  while ((match = h1Regex.exec(html)) !== null) {
     const text = stripTags(match[1]).trim();
     if (text && text.length > 3 && text.length < 200) {
       headings.push(text);
     }
   }
 
-  for (const match of h2Matches) {
+  while ((match = h2Regex.exec(html)) !== null) {
     const text = stripTags(match[1]).trim();
     if (text && text.length > 3 && text.length < 200) {
       headings.push(text);
@@ -122,9 +125,10 @@ function extractHeadings(html: string): string[] {
 function extractKeyPoints(html: string): string[] {
   const points: string[] = [];
 
-  // Extract list items
-  const liMatches = html.matchAll(/<li[^>]*>([^<]+)<\/li>/gi);
-  for (const match of liMatches) {
+  // Extract list items - use exec instead of matchAll
+  const liRegex = /<li[^>]*>([^<]+)<\/li>/gi;
+  let match;
+  while ((match = liRegex.exec(html)) !== null) {
     const text = stripTags(match[1]).trim();
     if (text && text.length > 10 && text.length < 150) {
       points.push(text);
@@ -132,10 +136,8 @@ function extractKeyPoints(html: string): string[] {
   }
 
   // Extract strong/bold text
-  const strongMatches = html.matchAll(
-    /<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>/gi,
-  );
-  for (const match of strongMatches) {
+  const strongRegex = /<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>/gi;
+  while ((match = strongRegex.exec(html)) !== null) {
     const text = stripTags(match[1]).trim();
     if (text && text.length > 5 && text.length < 100) {
       points.push(text);
@@ -150,11 +152,11 @@ function extractImages(
   baseUrl: URL,
 ): { src: string; alt: string }[] {
   const images: { src: string; alt: string }[] = [];
-  const imgMatches = html.matchAll(
-    /<img[^>]*src=["']([^"']+)["'][^>]*(?:alt=["']([^"']*)["'])?/gi,
-  );
+  const imgRegex =
+    /<img[^>]*src=["']([^"']+)["'][^>]*(?:alt=["']([^"']*)["'])?/gi;
 
-  for (const match of imgMatches) {
+  let match;
+  while ((match = imgRegex.exec(html)) !== null) {
     let src = match[1];
     const alt = match[2] || "";
 
@@ -187,9 +189,10 @@ function extractImages(
 function extractColors(html: string): string[] {
   const colors: string[] = [];
 
-  // Extract hex colors from inline styles
-  const hexMatches = html.matchAll(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b/g);
-  for (const match of hexMatches) {
+  // Extract hex colors from inline styles - use exec instead of matchAll
+  const hexRegex = /#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b/g;
+  let match;
+  while ((match = hexRegex.exec(html)) !== null) {
     const color = `#${match[1].toUpperCase()}`;
     if (!colors.includes(color)) {
       colors.push(color);
@@ -197,8 +200,8 @@ function extractColors(html: string): string[] {
   }
 
   // Extract rgb colors
-  const rgbMatches = html.matchAll(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/gi);
-  for (const match of rgbMatches) {
+  const rgbRegex = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/gi;
+  while ((match = rgbRegex.exec(html)) !== null) {
     const hex = rgbToHex(
       parseInt(match[1]),
       parseInt(match[2]),
