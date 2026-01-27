@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Save file to disk
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const buffer = new Uint8Array(bytes);
     await writeFile(filepath, buffer);
 
     // Return the public URL path
