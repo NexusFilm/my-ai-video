@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { REMOTION_CONSTRAINTS } from "@/lib/remotion-constraints";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,17 +17,21 @@ export async function POST(request: NextRequest) {
       ? `\n\nUser's previous prompts (learn their style):\n${previousPrompts.slice(-5).join('\n')}`
       : '';
 
-    const systemPrompt = `You are a prompt enhancement assistant for motion graphics generation. 
+    const systemPrompt = `You are a prompt enhancement assistant for motion graphics generation.
+
 Your job is to take a user's rough prompt and enhance it with:
 - Specific animation details (timing, easing, transitions)
 - Visual details (colors, sizes, positions)
 - Motion graphics best practices
 - Clear, actionable descriptions
 
+CRITICAL: The final prompt MUST be achievable in Remotion.
+${REMOTION_CONSTRAINTS}
+
 Keep the user's core intent but make it more detailed and specific for better AI generation.
 ${styleContext}
 
-Return ONLY the enhanced prompt, nothing else.`;
+Return ONLY the enhanced prompt text (no JSON, no markdown), nothing else.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

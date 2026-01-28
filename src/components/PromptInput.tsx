@@ -132,6 +132,7 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
+    const [promptSuggestion, setPromptSuggestion] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -718,7 +719,11 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
         }
 
         const data = await response.json();
-        setPrompt(data.enhancedPrompt);
+        const enhanced = String(data.enhancedPrompt || "").trim();
+        if (enhanced) {
+          // Option 2 UX: show a preview and let the user apply it.
+          setPromptSuggestion(enhanced);
+        }
       } catch (error) {
         console.error("Enhancement error:", error);
         onError?.("Failed to enhance prompt", "api");
@@ -733,6 +738,8 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
 
       // Save prompt to history for style learning
       savePromptToHistory(prompt);
+      // Clear any stale suggestion on submit
+      setPromptSuggestion(null);
 
       // Landing variant uses navigation instead of API call
       if (isLanding && onNavigate) {
@@ -895,6 +902,45 @@ export const PromptInput = forwardRef<PromptInputRef, PromptInputProps>(
               </div>
             </div>
           </div>
+
+          {/* Suggested Prompt Preview (CRM-ish, but in-app) */}
+          {promptSuggestion && !isLanding && (
+            <div className="mt-3 bg-background-elevated rounded-xl border border-blue-500/20 p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm text-blue-200 font-medium">Suggested Prompt</span>
+                  <span className="text-[11px] text-muted-foreground">(review → apply)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+                    onClick={() => {
+                      setPrompt(promptSuggestion);
+                      setPromptSuggestion(null);
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setPromptSuggestion(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                {promptSuggestion}
+              </div>
+            </div>
+          )}
 
           <div
             className={`flex flex-wrap items-center gap-1.5 mt-3 ${
