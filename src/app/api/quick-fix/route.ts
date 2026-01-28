@@ -7,6 +7,8 @@ interface FixResponse {
   fixedCode: string;
   explanation: string;
   linesChanged: number[];
+  /** A short, user-facing prompt that can be pasted into the prompt box to guide a targeted refine. */
+  suggestedPrompt?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -102,7 +104,8 @@ RESPONSE FORMAT (strict JSON):
       "fixedLine": "<corrected line>"
     }
   ],
-  "explanation": "<brief explanation of what was wrong and how you fixed it>"
+  "explanation": "<brief explanation of what was wrong and how you fixed it>",
+  "suggestedPrompt": "<one short instruction to the user that can be pasted into the prompt box to refine ONLY what's broken (must respect Remotion limitations)>"
 }
 
 COMMON ERRORS AND FIXES:
@@ -113,7 +116,8 @@ COMMON ERRORS AND FIXES:
 - "Property X does not exist" → Check object shape or add optional chaining
 
 If multiple lines need fixing, include all in the fixes array.
-If you cannot determine the exact fix, return: { "fixes": [], "explanation": "Unable to determine fix" }`;
+Always include a "suggestedPrompt" that describes the minimal change needed.
+If you cannot determine the exact fix, return: { "fixes": [], "explanation": "Unable to determine fix", "suggestedPrompt": "Fix the error without rewriting the whole animation. Only change the lines causing the error." }`;
 
     const userPrompt = `Fix this error in the Remotion animation code:
 
@@ -165,6 +169,10 @@ Return ONLY a valid JSON object with the fixes.`;
 
     const data = await response.json();
     const fixData = JSON.parse(data.choices[0].message.content);
+    const suggestedPrompt: string | undefined =
+      typeof fixData.suggestedPrompt === "string" && fixData.suggestedPrompt.trim()
+        ? fixData.suggestedPrompt.trim()
+        : undefined;
 
     // Apply the fixes to the code
     if (fixData.fixes && fixData.fixes.length > 0) {
@@ -183,6 +191,7 @@ Return ONLY a valid JSON object with the fixes.`;
         fixedCode: fixedLines.join("\n"),
         explanation: fixData.explanation || "Applied automatic fix",
         linesChanged: changedLineNumbers,
+        suggestedPrompt,
       };
 
       return Response.json(result);
@@ -193,6 +202,7 @@ Return ONLY a valid JSON object with the fixes.`;
       fixedCode: code,
       explanation: fixData.explanation || "No automatic fix available",
       linesChanged: [],
+      suggestedPrompt,
     });
   } catch (error) {
     console.error("Quick fix error:", error);

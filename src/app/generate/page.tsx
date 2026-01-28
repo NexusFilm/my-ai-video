@@ -98,6 +98,7 @@ function GeneratePageContent() {
     fixedCode: string;
     explanation: string;
     linesChanged: number[];
+    suggestedPrompt?: string;
   } | null>(null);
   const [isAnalyzingError, setIsAnalyzingError] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<{
@@ -204,6 +205,7 @@ function GeneratePageContent() {
             fixedCode: result.fixedCode,
             explanation: result.explanation,
             linesChanged: result.linesChanged,
+            suggestedPrompt: result.suggestedPrompt,
           });
         } else {
           setSuggestedFix({
@@ -211,6 +213,7 @@ function GeneratePageContent() {
             explanation:
               result.explanation || "Unable to suggest a fix for this error.",
             linesChanged: [],
+            suggestedPrompt: result.suggestedPrompt,
           });
         }
       } catch (err) {
@@ -506,6 +509,40 @@ function GeneratePageContent() {
                       </Button>
                     )}
 
+                    {suggestedFix?.suggestedPrompt && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                        onClick={() => {
+                          setPrompt(suggestedFix.suggestedPrompt || "");
+                          setIsRefineMode(true);
+                        }}
+                      >
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Put suggestion in prompt
+                      </Button>
+                    )}
+
+                    {suggestedFix?.suggestedPrompt && (
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => {
+                          // Use refine mode and trigger a targeted generation using the suggested prompt.
+                          setPrompt(suggestedFix.suggestedPrompt || "");
+                          setIsRefineMode(true);
+                          // Let state update before triggering.
+                          setTimeout(() => {
+                            promptInputRef.current?.triggerGeneration();
+                          }, 50);
+                        }}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" />
+                        Fix using refine (targeted)
+                      </Button>
+                    )}
+
                     {suggestedFix?.fixedCode && (
                       <Button
                         size="sm"
@@ -513,7 +550,7 @@ function GeneratePageContent() {
                         onClick={applySuggestedFix}
                       >
                         <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Apply Fix
+                        Apply Code Fix
                       </Button>
                     )}
 
