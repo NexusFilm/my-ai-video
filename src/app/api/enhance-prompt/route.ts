@@ -3,6 +3,14 @@ import { REMOTION_CONSTRAINTS } from "@/lib/remotion-constraints";
 
 export async function POST(request: NextRequest) {
   try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY environment variable is not set" },
+        { status: 500 }
+      );
+    }
+
     const { prompt, previousPrompts } = await request.json();
 
     if (!prompt) {
@@ -37,7 +45,7 @@ Return ONLY the enhanced prompt text (no JSON, no markdown), nothing else.`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",

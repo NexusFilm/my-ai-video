@@ -13,6 +13,15 @@ interface FixResponse {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for API key first
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return Response.json(
+        { error: "OPENAI_API_KEY environment variable is not set" },
+        { status: 500 },
+      );
+    }
+
     // Emergency kill switch to stop all outbound AI calls
     if (process.env.API_DISABLED === "true") {
       return Response.json(
@@ -149,7 +158,7 @@ Return ONLY a valid JSON object with the fixes.`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini", // Use faster/cheaper model for quick fixes

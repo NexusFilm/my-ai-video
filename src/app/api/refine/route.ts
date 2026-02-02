@@ -5,6 +5,15 @@ import { REMOTION_CONSTRAINTS } from "@/lib/remotion-constraints";
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for API key first
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return Response.json(
+        { error: "OPENAI_API_KEY environment variable is not set" },
+        { status: 500 },
+      );
+    }
+
     // Emergency kill switch to stop all outbound AI calls
     if (process.env.API_DISABLED === "true") {
       return Response.json(
@@ -93,7 +102,7 @@ The user wants to refine this code. Make the requested changes while keeping eve
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
